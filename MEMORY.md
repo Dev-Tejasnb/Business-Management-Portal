@@ -1,0 +1,1 @@
+- [Customer Management Module Implementation](memory/customer-management-module.md) — Implemented shop-scoped customer CRUD with phone normalization, RBAC, audit logging, and soft-delete/archive functionality

@@ -1,0 +1,153 @@
+/**
+ * Application types for the Business Management Portal
+ * Matches backend ApplicationStatus enum from app/models/application.py
+ */
+
+export type ApplicationStatus =
+  | 'enquiry'
+  | 'applied'
+  | 'documents_pending'
+  | 'under_processing'
+  | 'completed'
+  | 'rejected'
+  | 'cancelled';
+
+export interface Application {
+  id: number;
+  application_number: string;
+  customer_id: number;
+  customer: {
+    id: number;
+    name: string;
+    mobile: string;
+    email?: string;
+  };
+  service_id: number;
+  service: {
+    id: number;
+    name: string;
+    description?: string;
+  };
+  status: ApplicationStatus;
+  assigned_staff_id?: number | null;
+  assigned_staff?: {
+    id: number;
+    full_name: string;
+    email: string;
+  } | null;
+  application_data: Record<string, any>;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApplicationListParams {
+  shop_id: number;
+  search?: string;
+  status?: ApplicationStatus;
+  service_id?: number;
+  customer_id?: number;
+  assigned_staff_id?: number;
+  page?: number;
+  page_size?: number;
+}
+
+export interface ApplicationListResponse {
+  applications: Application[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface CreateApplicationRequest {
+  customer_id: number;
+  service_id: number;
+  assigned_staff_id?: number;
+  application_data?: Record<string, any>;
+  notes?: string;
+}
+
+export interface UpdateApplicationRequest {
+  application_data?: Record<string, any>;
+  notes?: string;
+  assigned_staff_id?: number | null;
+  status?: ApplicationStatus;
+}
+
+export interface AssignStaffRequest {
+  assigned_staff_id?: number | null;
+}
+
+export interface UpdateStatusRequest {
+  status: ApplicationStatus;
+}
+
+export interface ServiceField {
+  id: number;
+  service_id: number;
+  name: string;
+  label: string;
+  field_type: 'text' | 'number' | 'date' | 'select' | 'textarea' | 'boolean';
+  is_required: boolean;
+  options?: string[];
+  help_text?: string;
+  order: number;
+}
+
+export interface Service {
+  id: number;
+  shop_id: number;
+  name: string;
+  description?: string;
+  base_price?: number;
+  status: 'active' | 'inactive' | 'archived';
+  fields: ServiceField[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Customer {
+  id: number;
+  shop_id: number;
+  name: string;
+  mobile: string;
+  email?: string;
+  address?: string;
+  notes?: string;
+  status: 'active' | 'inactive' | 'archived';
+  primary_staff_id?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface User {
+  id: number;
+  email: string;
+  full_name: string;
+  is_active: boolean;
+  platform_role?: string;
+}
+
+export interface ShopMembership {
+  user_id: number;
+  shop_id: number;
+  role: 'owner' | 'manager' | 'staff';
+  is_active: boolean;
+}
+
+export interface AuditLog {
+  id: number;
+  action: string;
+  module: string;
+  actor_user_id?: number;
+  actor_role?: string;
+  shop_id?: number;
+  entity_type: string;
+  entity_id: string;
+  old_values?: Record<string, any>;
+  new_values?: Record<string, any>;
+  ip_address?: string;
+  user_agent?: string;
+  created_at: string;
+}

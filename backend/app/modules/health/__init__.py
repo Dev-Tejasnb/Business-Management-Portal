@@ -1,0 +1,1 @@
+"""Health module - canonical template for future feature modules."""

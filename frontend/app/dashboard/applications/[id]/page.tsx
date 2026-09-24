@@ -1,0 +1,743 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { useRouter, useParams } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ProtectedRoute } from "@/components/protected-route";
+import Link from "next/link";
+import { ArrowLeft, Edit, Users, Banknote, ChevronLeft, ChevronRight, Save, X, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ApplicationStatus } from "@/src/types/application";
+import { DocumentManager } from "@/components/documents/document-manager";
+import { BillingManager } from "@/components/billing/billing-manager";
+import { staffApi, billingApi, getMyMembership } from "@/lib/api";
+
+interface Application {
+  id: number;
+  application_number: string;
+  customer_id: number;
+  customer: {
+    id: number;
+    name: string;
+    mobile: string;
+    email?: string;
+    address?: string;
+  };
+  service_id: number;
+  service: {
+    id: number;
+    name: string;
+    description?: string;
+    base_price: number;
+    fields: ServiceField[];
+  };
+  status: ApplicationStatus;
+  assigned_staff_id?: number | null;
+  assigned_staff?: {
+    id: number;
+    full_name: string;
+    email: string;
+  } | null;
+  application_data: Record<string, any>;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ServiceField {
+  id: number;
+  service_id: number;
+  name: string;
+  label: string;
+  field_type: 'text' | 'number' | 'date' | 'select' | 'textarea' | 'boolean';
+  is_required: boolean;
+  options?: string[];
+  help_text?: string;
+  order: number;
+}
+
+interface Staff {
+  id: number;
+  email: string;
+  full_name: string;
+  is_active: boolean;
+  platform_role?: string;
+}
+
+interface UserPermissions {
+  canCreateBilling: boolean;
+  canUpdateBilling: boolean;
+  canDiscount: boolean;
+  canCharge: boolean;
+  canVoid: boolean;
+  canPaymentCreate: boolean;
+  canPaymentView: boolean;
+}
+
+function ApplicationDetailContent() {
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
+  const params = useParams();
+  const applicationId = params?.id as string;
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [application, setApplication] = useState<Application | null>(null);
+  const [staff, setStaff] = useState<Staff[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+
+  // Form data for editing
+  const [formData, setFormData] = useState({
+    status: "" as ApplicationStatus | "",
+    assigned_staff_id: "" as number | "",
+    application_data: {} as Record<string, any>,
+    notes: "",
+  });
+
+  const shopIdParam = new URLSearchParams(window.location.search).get("shop_id");
+  const [shopId, setShopId] = useState<number | null>(shopIdParam ? parseInt(shopIdParam, 10) : null);
+  const [permissions, setPermissions] = useState<UserPermissions>({
+    canCreateBilling: false,
+    canUpdateBilling: false,
+    canDiscount: false,
+    canCharge: false,
+    canVoid: false,
+    canPaymentCreate: false,
+    canPaymentView: false,
+  });
+
+  const fetchPermissions = useCallback(async () => {
+    if (!shopId || !user) return;
+    try {
+      const res = await getMyMembership(shopId);
+      const role = res.role as "shop_owner" | "shop_manager" | "staff" | "financial_staff";
+
+      // Map roles to billing permissions
+      const perms: UserPermissions = {
+        canCreateBilling: ["shop_owner", "shop_manager", "financial_staff"].includes(role),
+        canUpdateBilling: ["shop_owner", "shop_manager"].includes(role),
+        canDiscount: ["shop_owner", "shop_manager"].includes(role),
+        canCharge: ["shop_owner", "shop_manager"].includes(role),
+        canVoid: ["shop_owner", "shop_manager"].includes(role),
+        canPaymentCreate: ["shop_owner", "shop_manager", "financial_staff"].includes(role),
+        canPaymentView: ["shop_owner", "shop_manager", "financial_staff", "staff"].includes(role),
+      };
+      setPermissions(perms);
+    } catch (err) {
+      console.error("Failed to fetch permissions:", err);
+    }
+  }, [shopId, user]);
+
+  useEffect(() => {
+    fetchPermissions();
+  }, [fetchPermissions]);
+
+  const fetchApplication = useCallback(async () => {
+    if (!shopId || !applicationId) return;
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/v1/shops/${shopId}/applications/${applicationId}`, {
+        headers: { "Authorization": `Bearer ${localStorage.getItem("access_token")}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setApplication(data);
+        setFormData({
+          status: data.status,
+          assigned_staff_id: data.assigned_staff_id || "",
+          application_data: data.application_data || {},
+          notes: data.notes || "",
+        });
+      } else if (response.status === 401) {
+        router.push("/login");
+      } else {
+        throw new Error("Failed to fetch application");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setLoading(false);
+    }
+  }, [shopId, applicationId, router]);
+
+  const fetchStaff = useCallback(async () => {
+    if (!shopId) return;
+    try {
+      const response = await fetch(`/api/v1/shops/${shopId}/staff?page_size=100`, {
+        headers: { "Authorization": `Bearer ${localStorage.getItem("access_token")}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setStaff(data.items || data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch staff:", err);
+    }
+  }, [shopId]);
+
+  useEffect(() => {
+    if (shopId) {
+      fetchApplication();
+      fetchStaff();
+    }
+  }, [shopId, fetchApplication, fetchStaff]);
+
+  const getStatusBadge = (status: ApplicationStatus) => {
+    const statusConfigs: Record<ApplicationStatus, { variant: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" | "info"; label: string }> = {
+      enquiry: { variant: "secondary", label: "Enquiry" },
+      applied: { variant: "default", label: "Applied" },
+      documents_pending: { variant: "warning", label: "Documents Pending" },
+      under_processing: { variant: "info", label: "Under Processing" },
+      completed: { variant: "success", label: "Completed" },
+      rejected: { variant: "destructive", label: "Rejected" },
+      cancelled: { variant: "destructive", label: "Cancelled" },
+    };
+    const config = statusConfigs[status] || { variant: "secondary", label: status };
+    return <Badge variant={config.variant}>{config.label}</Badge>;
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target;
+    const newValue = type === "checkbox" ? (e.target as HTMLInputElement).checked : value;
+
+    if (name === "assigned_staff_id") {
+      const stringVal = value as string;
+      setFormData(prev => ({ ...prev, [name]: stringVal === "" ? "" : parseInt(stringVal, 10) }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: newValue }));
+    }
+  };
+
+  const handleDynamicFieldChange = (fieldName: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      application_data: { ...prev.application_data, [fieldName]: value },
+    }));
+  };
+
+  const handleSave = async () => {
+    if (!shopId || !applicationId) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const payload = {
+        status: formData.status,
+        assigned_staff_id: formData.assigned_staff_id || null,
+        application_data: formData.application_data,
+        notes: formData.notes || null,
+      };
+      const resp = await fetch(`/api/v1/shops/${shopId}/applications/${applicationId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("access_token")}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) {
+        const data = await resp.json();
+        throw new Error(data.detail || "Failed to update application");
+      }
+      const updated = await resp.json();
+      setApplication(updated);
+      setEditMode(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <ProtectedRoute>
+        <div className="container mx-auto py-8">
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  if (error) {
+    return (
+      <ProtectedRoute>
+        <div className="container mx-auto py-8">
+          <div className="text-center">
+            <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+            <h2 className="text-xl font-semibold mb-2">Failed to load application</h2>
+            <p className="text-muted-foreground mb-4">{error}</p>
+            <Button variant="outline" asChild>
+              <Link href="/dashboard/applications">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Applications
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  if (!application) {
+    return (
+      <ProtectedRoute>
+        <div className="container mx-auto py-8">
+          <div className="text-center">
+            <X className="h-12 w-12 text-destructive mx-auto mb-4" />
+            <h2 className="text-xl font-semibold mb-2">Application not found</h2>
+            <Button variant="outline" asChild>
+              <Link href="/dashboard/applications">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Applications
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  const statusOrder: ApplicationStatus[] = ["enquiry", "applied", "documents_pending", "under_processing", "completed", "rejected", "cancelled"];
+  const currentStatusIndex = statusOrder.indexOf(application.status);
+
+  return (
+    <ProtectedRoute>
+      <div className="container mx-auto py-8">
+        <div className="flex items-center gap-4 mb-6">
+          <Button variant="outline" size="icon" asChild>
+            <Link href={`/dashboard/applications?shop_id=${shopId}`}>
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <div className="flex-1">
+            <h1 className="text-3xl font-bold tracking-tight">{application.application_number}</h1>
+            <p className="text-muted-foreground mt-1">{application.service.name}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {getStatusBadge(application.status)}
+            <Button variant="outline" onClick={() => setEditMode(!editMode)}>
+              {editMode ? <X className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
+              {editMode ? "Cancel" : "Edit"}
+            </Button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mb-6 p-4 rounded-lg bg-destructive/10 text-destructive">
+            {error}
+          </div>
+        )}
+
+        {/* Status Timeline */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Status Timeline</CardTitle>
+            <CardDescription>Track the progress of this application</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="relative pl-4">
+              <div className="absolute left-2 top-0 bottom-0 w-0.5 bg-muted" />
+              {statusOrder.map((status, index) => {
+                const isCompleted = index < currentStatusIndex;
+                const isCurrent = index === currentStatusIndex;
+                const isFuture = index > currentStatusIndex;
+
+                const statusConfigs: Record<ApplicationStatus, { label: string; icon: React.ReactNode }> = {
+                  enquiry: { label: "Enquiry", icon: <span className="text-xs">1</span> },
+                  applied: { label: "Applied", icon: <CheckCircle className="h-4 w-4" /> },
+                  documents_pending: { label: "Documents Pending", icon: <AlertCircle className="h-4 w-4" /> },
+                  under_processing: { label: "Under Processing", icon: <Loader2 className="h-4 w-4 animate-spin" /> },
+                  completed: { label: "Completed", icon: <CheckCircle className="h-4 w-4 text-green-500" /> },
+                  rejected: { label: "Rejected", icon: <X className="h-4 w-4 text-red-500" /> },
+                  cancelled: { label: "Cancelled", icon: <X className="h-4 w-4 text-gray-500" /> },
+                };
+                const config = statusConfigs[status];
+
+                return (
+                  <div key={status} className="relative flex items-start gap-4 pb-6 last:pb-0">
+                    <div className={`flex h-8 w-8 items-center justify-center rounded-full border-2 shrink-0 relative z-10 ${
+                      isCompleted ? "bg-primary border-primary text-primary-foreground" :
+                      isCurrent ? "bg-primary border-primary text-primary-foreground" :
+                      "bg-background border-muted text-muted-foreground"
+                    }`}>
+                      {isCompleted ? <CheckCircle className="h-4 w-4" /> : config.icon}
+                    </div>
+                    <div className="flex-1 pt-1">
+                      <p className={`font-medium ${isCurrent ? "text-foreground" : isCompleted ? "text-foreground" : "text-muted-foreground"}`}>
+                        {config.label}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {isCompleted && application.updated_at && `Updated ${new Date(application.updated_at).toLocaleDateString()}`}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {/* Customer Info */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Customer
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">Name</Label>
+                <p className="font-medium">{application.customer.name}</p>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Mobile</Label>
+                <p className="font-mono">{application.customer.mobile}</p>
+              </div>
+              {application.customer.email && (
+                <div>
+                  <Label className="text-xs text-muted-foreground">Email</Label>
+                  <p>{application.customer.email}</p>
+                </div>
+              )}
+              {application.customer.address && (
+                <div>
+                  <Label className="text-xs text-muted-foreground">Address</Label>
+                  <p className="text-sm">{application.customer.address}</p>
+                </div>
+              )}
+              <div className="pt-2 border-t">
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/dashboard/customers/${application.customer.id}?shop_id=${shopId}`}>
+                    View Customer Profile
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Service Info */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Banknote className="h-5 w-5" />
+                Service
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">Name</Label>
+                <p className="font-medium">{application.service.name}</p>
+              </div>
+              {application.service.description && (
+                <div>
+                  <Label className="text-xs text-muted-foreground">Description</Label>
+                  <p className="text-sm">{application.service.description}</p>
+                </div>
+              )}
+              <div>
+                <Label className="text-xs text-muted-foreground">Base Price</Label>
+                <p className="font-mono">{new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(application.service.base_price)}</p>
+              </div>
+              <div className="pt-2 border-t">
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/dashboard/services/${application.service.id}?shop_id=${shopId}`}>
+                    View Service Details
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Assigned Staff */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Assigned Staff
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {application.assigned_staff ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-shrink-0 h-10 w-10 rounded bg-muted/50 flex items-center justify-center">
+                      <Users className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <p className="font-medium">{application.assigned_staff.full_name}</p>
+                      <p className="text-sm text-muted-foreground">{application.assigned_staff.email}</p>
+                    </div>
+                  </div>
+                  {editMode && (
+                    <div className="space-y-2">
+                      <Label htmlFor="assigned_staff_id">Reassign Staff</Label>
+                      <Select
+                        value={formData.assigned_staff_id === "" ? "" : String(formData.assigned_staff_id)}
+                        onValueChange={(v) => handleChange({ target: { name: "assigned_staff_id", value: v } } as any)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select staff member" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">Unassign</SelectItem>
+                          {staff.map((s) => (
+                            <SelectItem key={s.id} value={String(s.id)}>
+                              {s.full_name} ({s.email})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-muted-foreground italic">No staff assigned</p>
+                  {editMode && (
+                    <div className="space-y-2">
+                      <Label htmlFor="assigned_staff_id">Assign Staff</Label>
+                      <Select
+                        value={formData.assigned_staff_id === "" ? "" : String(formData.assigned_staff_id)}
+                        onValueChange={(v) => handleChange({ target: { name: "assigned_staff_id", value: v } } as any)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select staff member" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {staff.map((s) => (
+                            <SelectItem key={s.id} value={String(s.id)}>
+                              {s.full_name} ({s.email})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Application Data */}
+          {application.service.fields && application.service.fields.length > 0 && (
+            <Card className="md:col-span-2 lg:col-span-3">
+              <CardHeader>
+                <CardTitle>Service Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {application.service.fields.map((field) => {
+                  const value = application.application_data?.[field.name];
+                  const displayValue = value === undefined || value === null || value === ""
+                    ? <span className="text-muted-foreground italic">Not provided</span>
+                    : field.field_type === "boolean"
+                      ? (value ? "Yes" : "No")
+                      : field.field_type === "date"
+                        ? new Date(value).toLocaleDateString()
+                        : String(value);
+
+                  return (
+                    <div key={field.id} className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">{field.label}</Label>
+                      {editMode ? (
+                        <div>
+                          {field.field_type === "select" && field.options && field.options.length > 0 ? (
+                            <Select
+                              value={formData.application_data[field.name] === undefined ? "" : String(formData.application_data[field.name])}
+                              onValueChange={(v) => handleDynamicFieldChange(field.name, v === "" ? undefined : v)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={`Select ${field.label}`} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="">Select...</SelectItem>
+                                {field.options.map((opt) => (
+                                  <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : field.field_type === "boolean" ? (
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                id={`edit-${field.name}`}
+                                checked={formData.application_data[field.name] === true}
+                                onChange={(e) => handleDynamicFieldChange(field.name, e.target.checked)}
+                                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                              />
+                              <Label htmlFor={`edit-${field.name}`} className="cursor-pointer mb-0">
+                                {field.label === "Yes" ? "Yes" : "Enabled"}
+                              </Label>
+                            </div>
+                          ) : field.field_type === "textarea" ? (
+                            <Textarea
+                              id={`edit-${field.name}`}
+                              value={formData.application_data[field.name] || ""}
+                              onChange={(e) => handleDynamicFieldChange(field.name, e.target.value)}
+                              rows={3}
+                            />
+                          ) : field.field_type === "number" ? (
+                            <Input
+                              id={`edit-${field.name}`}
+                              type="number"
+                              value={formData.application_data[field.name] === undefined ? "" : String(formData.application_data[field.name])}
+                              onChange={(e) => handleDynamicFieldChange(field.name, e.target.value === "" ? undefined : parseFloat(e.target.value))}
+                            />
+                          ) : field.field_type === "date" ? (
+                            <Input
+                              id={`edit-${field.name}`}
+                              type="date"
+                              value={formData.application_data[field.name] || ""}
+                              onChange={(e) => handleDynamicFieldChange(field.name, e.target.value || undefined)}
+                            />
+                          ) : (
+                            <Input
+                              id={`edit-${field.name}`}
+                              value={formData.application_data[field.name] || ""}
+                              onChange={(e) => handleDynamicFieldChange(field.name, e.target.value || undefined)}
+                            />
+                          )}
+                        </div>
+                      ) : (
+                        <p>{displayValue}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Notes */}
+          <Card className="md:col-span-2 lg:col-span-3">
+            <CardHeader>
+              <CardTitle>Internal Notes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {editMode ? (
+                <div className="space-y-2">
+                  <Label htmlFor="notes">Notes</Label>
+                  <Textarea
+                    id="notes"
+                    value={formData.notes}
+                    onChange={handleChange}
+                    rows={4}
+                    placeholder="Add internal notes..."
+                  />
+                </div>
+              ) : (
+                <p className={application.notes ? "" : "text-muted-foreground italic"}>
+                  {application.notes || "No notes added"}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Metadata */}
+          <Card className="md:col-span-2 lg:col-span-3">
+            <CardHeader>
+              <CardTitle>Application Details</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label className="text-xs text-muted-foreground">Created</Label>
+                <p>{new Date(application.created_at).toLocaleString()}</p>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Last Updated</Label>
+                <p>{new Date(application.updated_at).toLocaleString()}</p>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Customer ID</Label>
+                <p className="font-mono">{application.customer_id}</p>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Service ID</Label>
+                <p className="font-mono">{application.service_id}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Document Management Section */}
+        {shopId && application && (
+          <div className="mt-8">
+            <DocumentManager
+              shopId={shopId}
+              applicationId={application.id}
+              canUpload={true}
+              canVerify={true}
+              canReject={true}
+              canDelete={true}
+              onChecklistUpdated={fetchApplication}
+            />
+          </div>
+        )}
+
+        {/* Billing & Payments Section */}
+        {shopId && application && (
+          <div className="mt-8">
+            <BillingManager
+              shopId={shopId}
+              applicationId={application.id}
+              applicationNumber={application.application_number}
+              serviceName={application.service.name}
+              serviceBasePrice={application.service.base_price}
+              customerName={application.customer.name}
+              canCreate={permissions.canCreateBilling}
+              canUpdate={permissions.canUpdateBilling}
+              canDiscount={permissions.canDiscount}
+              canCharge={permissions.canCharge}
+              canVoid={permissions.canVoid}
+              canPaymentCreate={permissions.canPaymentCreate}
+              canPaymentView={permissions.canPaymentView}
+              onBillingCreated={fetchApplication}
+            />
+          </div>
+        )}
+
+        {editMode && (
+          <div className="mt-6 flex justify-end gap-3">
+            <Button variant="outline" onClick={() => {
+              setFormData({
+                status: application.status,
+                assigned_staff_id: application.assigned_staff_id || "",
+                application_data: application.application_data || {},
+                notes: application.notes || "",
+              });
+              setEditMode(false);
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={saving}>
+              <Save className="mr-2 h-4 w-4" />
+              {saving ? "Saving..." : "Save Changes"}
+            </Button>
+          </div>
+        )}
+      </div>
+    </ProtectedRoute>
+  );
+}
+
+export default function ApplicationDetailPage() {
+  return <ApplicationDetailContent />;
+}
