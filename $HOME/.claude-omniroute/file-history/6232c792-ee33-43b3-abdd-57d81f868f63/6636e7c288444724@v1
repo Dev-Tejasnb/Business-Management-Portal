@@ -1,0 +1,189 @@
+# Business Management Portal — Project Status
+
+## Project Overview
+
+**Business Management Portal** is a multi-tenant SaaS platform for service-based businesses such as:
+
+- CSC centers
+- GramaOne centers
+- Online Service Centers
+- Xerox/Printing shops
+- Cyber Cafes
+- Digital Service Centers
+- E-Governance centers
+
+**Core flow:**
+```
+Customer → Service → Application → Documents → Payment → Status → Completion
+```
+
+**Important:** Only modules actually implemented are marked complete below.
+
+## Architecture
+
+| Layer | Technology |
+|-------|------------|
+| Frontend | Next.js + React + TypeScript |
+| UI | Tailwind CSS + existing component system |
+| Backend | FastAPI + Python |
+| Database | PostgreSQL |
+| ORM | SQLAlchemy 2.x |
+| Migrations | Alembic |
+| Authentication | Project's existing authentication (JWT) |
+| Password Hashing | Argon2id |
+| Cache/Session | Redis |
+| Object Storage | MinIO locally / S3-compatible storage later |
+| Deployment | Docker / Docker Compose |
+| Architecture | Modular monolith |
+| Multi-tenancy | Shared database with `shop_id` isolation |
+
+*All technologies confirmed in the repository.*
+
+## Completed Phases
+
+| Phase | Name | Status | Verification |
+|-------|------|--------|-------------|
+| 3.1 | Security / RBAC / Multi-Tenancy Hardening | COMPLETE AND VERIFIED | Verified |
+| 4 | Service Management | COMPLETE AND VERIFIED | Verified |
+| 5 | Customer Management | COMPLETE | Verified |
+| 5.1 | Customer Security & Quality Verification | PASS WITH FIXES | 12/12 customer tests passed, frontend build passed, Docker services healthy, tenant isolation verified, customer RBAC verified, mobile normalization verified, per-shop uniqueness verified, archive/restore verified, primary staff assignment verified, audit logging verified, responsive frontend verified |
+
+**Fixes made during Phase 5.1:**
+1. Missing Archive icon import
+2. Audit action typo
+3. `primary_staff_id` blank → null handling
+
+## Current Phase
+
+**Phase 6 — Application Management Core**  
+Status: **IN PROGRESS**
+
+Phase 6 connects: **Customer + Service → Application**
+
+## Current Implementation State
+
+### What Already Exists (Verified)
+
+**Backend - Application Module (`backend/app/modules/applications/`):**
+- `router.py` — Full API endpoints (list, create, get, update, assign staff, update status)
+- `schemas.py` — Pydantic schemas (ApplicationCreate, ApplicationUpdate, ApplicationResponse, ApplicationListResponse)
+- `service.py` — ApplicationService with business logic (CRUD, validation, audit, tenant isolation)
+- `__init__.py` — Module init
+
+**Database:**
+- Model: `backend/app/models/application.py` — Application model with ApplicationStatus enum (ENQUIRY, APPLIED, DOCUMENTS_PENDING, UNDER_PROCESSING, COMPLETED, REJECTED, CANCELLED)
+- Migration: `0006_create_application_table.py` — Creates applications table with indexes, FKs, check constraint
+
+**Frontend (`frontend/app/dashboard/applications/`):**
+- `page.tsx` — Applications list with search, status filter, pagination (currently uses mock data)
+- `new/page.tsx` — 4-step wizard for creating applications (customer → service → staff → details with dynamic fields, currently uses mock data)
+
+**Tests (`backend/tests/test_applications.py`):**
+- 28 comprehensive async tests covering:
+  - Create application (with/without data, cross-shop validation, field validation)
+  - Get application
+  - List applications (filters, search, pagination)
+  - Update application (data, notes, staff, status)
+  - Assign/unassign staff (cross-shop validation)
+  - Update status
+  - Application number uniqueness and format
+  - Multiple applications per customer/service
+  - Archived service not usable for new applications
+
+### What is Partially Implemented
+
+- Frontend uses **mock data** instead of real API calls
+- Frontend status enum differs from backend (`frontend/src/types/application.ts` and UI pages define 9-10 statuses including `DRAFT`, `SUBMITTED`, `IN_REVIEW`, `ACTION_REQUIRED`, `APPROVED` vs backend: `enquiry`, `applied`, `documents_pending`, `under_processing`, `completed`, `rejected`, `cancelled`)
+- Application detail view (`/dashboard/applications/[id]`) — Not implemented
+- Application edit view (`/dashboard/applications/[id]/edit`) — Not implemented
+- Frontend build fails due to missing dependencies (`zod`, `react-hook-form`, `@hookform/resolvers/zod`) and invalid component imports (`@/components/ui`)
+
+### What is Not Implemented
+
+- Application detail page (`/dashboard/applications/[id]/page.tsx`)
+- Application edit page (`/dashboard/applications/[id]/edit/page.tsx`)
+- Frontend integration with real backend API (replace mock data in list and create pages)
+- Status enum alignment between frontend and backend
+- Frontend build passing (`npm run build`)
+
+### Database Migrations (in order)
+
+```
+0001_users_shops_memberships_audit.py
+0002_platform_manager_shops.py
+0003_unique_active_shop_owner.py
+0005_create_customer_table.py
+0006_create_application_table.py
+61add31d7b16_drop_old_customer_unique_constraint_and_.py
+6db39c802cda_create_service_tables.py
+```
+
+### Test Status
+
+| Test Suite | Tests | Status |
+|------------|-------|--------|
+| Customer tests | 12 | ✅ PASS (verified in Phase 5.1) |
+| Service tests | Not counted | Not verified |
+| Application tests | 23 | **Verified in code** (`backend/tests/test_applications.py`) — runtime execution pending active Postgres/Docker environment |
+| Phase 3.1 security tests | Multiple | Not verified in this session |
+| Tenancy tests | Multiple | Not verified in this session |
+
+### Frontend Routes (Implemented)
+
+| Route | Status | Notes |
+|-------|--------|-------|
+| `/dashboard/applications` | Partial | List view with mock data, invalid `@/components/ui` import |
+| `/dashboard/applications/new` | Partial | 4-step wizard with mock data, missing deps & invalid imports |
+| `/dashboard/applications/[id]` | ❌ Not implemented | Missing file |
+| `/dashboard/applications/[id]/edit` | ❌ Not implemented | Missing file |
+| `/dashboard/customers` | ✅ Implemented | Verified in Phase 5 |
+| `/dashboard/services` | ✅ Implemented | Verified in Phase 4 |
+| `/dashboard/staff` | ✅ Implemented | Verified in Phase 3.1 |
+
+### Docker Services
+
+| Service | Status |
+|---------|--------|
+| frontend (Next.js:3000) | Defined in docker-compose.yml |
+| backend (FastAPI:8000) | Defined in docker-compose.yml |
+| postgres (5432) | Defined in docker-compose.yml |
+| redis (6379) | Defined in docker-compose.yml |
+| minio (9000/9001) | Defined in docker-compose.yml |
+| minio-init | Defined in docker-compose.yml |
+
+*Docker Desktop daemon is currently stopped on host.*
+
+## Important Existing Modules (backend/app/modules/)
+
+- `auth` — Authentication
+- `health` — Health checks
+- `platform` — Platform management
+- `shops` — Shop management
+- `staff` — Staff management
+- `services` — Service management (with categories & fields)
+- `customers` — Customer management
+- `applications` — **Application management (Phase 6)**
+
+## Last Verified State
+
+- Phase 5.1: Customer verification completed (12/12 tests pass, frontend build passes, Docker healthy)
+- Phase 6 backend: Model, migration, schemas, service, router, tests verified complete in repository
+- Phase 6 frontend: List and create pages exist but use mock data, invalid imports, and uninstalled npm packages; detail and edit pages are missing
+
+## Known Issues
+
+1. **Frontend-Backend status enum mismatch** — Frontend uses different status values than backend ApplicationStatus enum
+2. **Frontend uses mock data** — No real API integration yet
+3. **Frontend build failure** — Missing dependencies (`zod`, `react-hook-form`, `@hookform/resolvers/zod`) and invalid `@/components/ui` barrel import in application pages
+4. **Missing detail/edit pages** — `/dashboard/applications/[id]` and `/dashboard/applications/[id]/edit` not implemented
+5. **Docker daemon stopped** — Needs Docker Desktop running to execute containerized backend tests and full stack verification
+
+## Next Action
+
+1. Align frontend `ApplicationStatus` enum in `frontend/src/types/application.ts` with backend (`enquiry`, `applied`, `documents_pending`, `under_processing`, `completed`, `rejected`, `cancelled`)
+2. Fix frontend component imports and form implementation without broken dependencies (matching existing customer/service pattern)
+3. Replace mock data in frontend list and create pages with real API calls
+4. Implement application detail view (`/dashboard/applications/[id]/page.tsx`)
+5. Implement application edit view (`/dashboard/applications/[id]/edit/page.tsx`)
+6. Run frontend build verification (`npm run build`)
+7. Start Docker Desktop and run full backend test suite (`make test` or `py -m pytest`)

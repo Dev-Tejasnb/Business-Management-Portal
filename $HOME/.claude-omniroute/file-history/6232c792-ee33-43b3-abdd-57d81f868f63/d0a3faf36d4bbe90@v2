@@ -1,0 +1,108 @@
+# Current Phase — Phase 7
+
+## Status
+
+**COMPLETE AND VERIFIED**
+
+## Objective
+
+Connect: **Application → Documents**
+
+Implement full document management for applications with service-required documents, secure file uploads, verification workflow, and tenant isolation.
+
+## Scope
+
+**Phase 7 includes:**
+
+- ServiceRequiredDocument model (allowed_file_types, max_file_size_mb, is_mandatory)
+- Document model (uploaded_by, storage_key, mime_type, file_size, status, rejection_reason, notes)
+- Document upload with dual-layer validation (extension + magic-byte MIME)
+- Deterministic MinIO storage keys: `shops/{shop_id}/applications/{application_id}/documents/{uuid}_{safe_filename}`
+- Document lifecycle statuses: UPLOADED, VERIFIED, REJECTED, ARCHIVED
+- Mandatory rejection_reason on rejection
+- Document replacement (archives previous upload)
+- Application document checklist (mandatory vs optional, verification status)
+- Presigned URLs for preview/download (streaming via GET /download)
+- RBAC: DOCUMENT_VIEW, DOCUMENT_UPLOAD, DOCUMENT_UPDATE, DOCUMENT_VERIFY, DOCUMENT_REJECT, DOCUMENT_DELETE
+- Append-only audit logging via AuditService on all mutations
+- Frontend: Document Manager component on Application Detail page
+
+## Out of Scope
+
+**The following are intentionally future modules — DO NOT IMPLEMENT:**
+
+- Payments
+- Billing
+- Invoices
+- SMS
+- WhatsApp
+- Notifications
+- Chat
+- Analytics
+- Reports
+- Subscriptions
+- Coupons
+- Offers
+- Appointments
+- Workflow redesign
+
+## Requirements & Implementation Status
+
+| Requirement | Details | Status |
+|-------------|---------|--------|
+| ServiceRequiredDocument model | Model with allowed_file_types, max_file_size_mb, is_mandatory | ✅ Done (`backend/app/models/service_field.py`) |
+| Document model | Model with shop_id, application_id, required_document_id, uploaded_by, storage_key, mime_type, file_size, status, rejection_reason, notes, verified_at, verified_by | ✅ Done (`backend/app/models/document.py`) |
+| Migration | Alembic migration creating documents table with indexes, FKs, check constraint | ✅ Done (`0007_create_document_tables.py`) |
+| Schemas | DocumentResponse, DocumentUpdate, DocumentVerify, DocumentReject, DocumentListResponse, DocumentChecklistRequirement, ApplicationDocumentChecklistResponse, PresignedUrlResponse | ✅ Done (`backend/app/modules/documents/schemas.py`) |
+| StorageService | validate_file, detect_mime_type, sanitize_filename, generate_storage_key, presigned URLs, streaming download | ✅ Done (`backend/app/core/storage.py`) |
+| DocumentService | upload_document, list_documents_for_application, get_application_checklist, get_document, get_presigned_url, get_document_stream, update_document, verify_document, reject_document, archive_or_delete_document | ✅ Done (`backend/app/modules/documents/service.py`) |
+| RBAC | DOCUMENT_VIEW, DOCUMENT_UPLOAD, DOCUMENT_UPDATE, DOCUMENT_VERIFY, DOCUMENT_REJECT, DOCUMENT_DELETE (Owner/Manager only) | ✅ Done (`backend/app/core/roles.py`, `router.py`) |
+| Tenant validation | All operations scoped to shop_id; cross-shop access returns 403 | ✅ Done |
+| Document upload | Multipart upload with required_document_id (optional), notes; dual validation (extension + magic bytes) | ✅ Done |
+| Document checklist | Calculates total/mandatory/verified counts per application | ✅ Done |
+| Document replacement | Replaces existing document for requirement; archives previous | ✅ Done |
+| Verification workflow | POST /verify with optional notes; status → VERIFIED; records verifier and timestamp | ✅ Done |
+| Rejection workflow | POST /reject with mandatory rejection_reason + optional notes; status → REJECTED | ✅ Done |
+| Soft delete / archive | DELETE /documents/{id} (hard_delete=false); status → ARCHIVED; keeps audit trail | ✅ Done |
+| Hard delete | DELETE /documents/{id}?hard_delete=true (Owner/Manager only); purges DB + storage | ✅ Done |
+| Presigned URLs | GET /url with expires_seconds (60-86400); returns url, mime_type, filename | ✅ Done |
+| Streaming download | GET /download streams directly from MinIO with Content-Disposition | ✅ Done |
+| Audit logging | All mutations (upload, update, verify, reject, archive, delete) logged via AuditService | ✅ Done |
+| Tests | Comprehensive async tests for all service methods and API endpoints | ✅ Done (31 document tests + 105 other = 136 total passed) |
+| Frontend types | TypeScript types matching backend schemas | ✅ Done (`frontend/src/types/document.ts`) |
+| Frontend component | DocumentManager component with checklist, upload, verify/reject modals, preview/download | ✅ Done (`frontend/components/documents/document-manager.tsx`) |
+| Frontend integration | DocumentManager embedded in Application Detail page | ✅ Done (`frontend/app/dashboard/applications/[id]/page.tsx`) |
+| Frontend build | Next.js 15 production build passes with 0 errors | ✅ Done (`npm run build`) |
+| Docker verification | All container services up and healthy | ✅ Done |
+
+## Implementation Checklist
+
+| Task | Status | Notes |
+|------|--------|-------|
+| [x] ServiceRequiredDocument model | ✅ Done | In `service_field.py` with ServiceField |
+| [x] Document model | ✅ Done | `backend/app/models/document.py` |
+| [x] Migration | ✅ Done | `0007_create_document_tables.py` |
+| [x] Schemas | ✅ Done | `backend/app/modules/documents/schemas.py` |
+| [x] StorageService | ✅ Done | `backend/app/core/storage.py` with MinIO integration |
+| [x] DocumentService | ✅ Done | `backend/app/modules/documents/service.py` |
+| [x] RBAC permissions | ✅ Done | DOCUMENT_* permissions; DOCUMENT_DELETE for Owner/Manager only |
+| [x] Tenant validation | ✅ Done | Shop-scoped queries throughout |
+| [x] Document upload endpoint | ✅ Done | POST /shops/{shop_id}/applications/{application_id}/documents |
+| [x] List documents endpoint | ✅ Done | GET /shops/{shop_id}/applications/{application_id}/documents |
+| [x] Checklist endpoint | ✅ Done | GET /shops/{shop_id}/applications/{application_id}/documents/checklist |
+| [x] Document detail endpoint | ✅ Done | GET /shops/{shop_id}/documents/{document_id} |
+| [x] Presigned URL endpoint | ✅ Done | GET /shops/{shop_id}/documents/{document_id}/url |
+| [x] Streaming download endpoint | ✅ Done | GET /shops/{shop_id}/documents/{document_id}/download |
+| [x] Update notes endpoint | ✅ Done | PATCH /shops/{shop_id}/documents/{document_id} |
+| [x] Verify endpoint | ✅ Done | POST /shops/{shop_id}/documents/{document_id}/verify |
+| [x] Reject endpoint | ✅ Done | POST /shops/{shop_id}/documents/{document_id}/reject (mandatory reason) |
+| [x] Archive/Delete endpoint | ✅ Done | DELETE /shops/{shop_id}/documents/{document_id}?hard_delete= |
+| [x] Audit logging | ✅ Done | All mutations recorded |
+| [x] Backend tests | ✅ Done | `backend/tests/test_documents.py` (31 test functions, all passing) |
+| [x] Frontend types | ✅ Done | `frontend/src/types/document.ts` |
+| [x] DocumentManager component | ✅ Done | Checklist, upload dropzone, verify/reject modals, preview/download |
+| [x] Application Detail integration | ✅ Done | Embedded in `frontend/app/dashboard/applications/[id]/page.tsx` |
+| [x] Frontend build | ✅ Done | `npm run build` succeeds (19 routes) |
+| [x] Full backend tests | ✅ Done | 136/136 passed in container |
+| [x] Docker verification | ✅ Done | All Docker containers healthy |
+| [x] Git review | ✅ Done | Repository verified |

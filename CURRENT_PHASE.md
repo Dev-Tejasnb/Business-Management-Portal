@@ -1,4 +1,4 @@
-# Current Phase — Phase 8
+# Current Phase — Phase 9
 
 ## Status
 
@@ -6,89 +6,79 @@
 
 ## Objective
 
-Connect: **Application → Service Price → Billing → Payment → Receipt**
+Connect: **Billing → Payment → Reports & Analytics**
 
 ## Scope
 
-**Phase 8 includes:**
+**Phase 9 includes:**
 
-- Billing model (shop_id, application_id, customer_id, invoice_number, service_amount, non_service_charges, subtotal, discount_type, discount_value, discount_amount, total_amount, amount_paid, balance_amount, payment_status, billing_status, notes)
-- BillingItem model for line items (service and non-service charges)
-- Payment model (shop_id, billing_id, recorded_by, amount, payment_method, reference_number, reference_exception, reference_exception_reason, notes, paid_at)
-- Deterministic invoice number generation: INV-{SHOP_CODE}-{YEAR}-{SEQUENTIAL}
-- Price snapshot functionality (storing service_amount at billing creation)
-- Concurrency protection with row-level locking (SELECT FOR UPDATE)
-- RBAC: BILLING_VIEW, BILLING_CREATE, BILLING_UPDATE, BILLING_DISCOUNT, BILLING_CHARGE, BILLING_VOID, PAYMENT_VIEW, PAYMENT_CREATE, PAYMENT_UPDATE
-- Append-only audit logging via AuditService on all mutations
+- 13 Report endpoints under `/api/v1/reports/*`: Summary, Revenue, Collection, Payment Methods, Applications, Services, Customers, Staff, Outstanding, Billing, Discounts, Financial Trend, Documents
+- 13 CSV export endpoints under `/api/v1/reports/export/*` matching each report
+- Decimal/Numeric(12,2) precision for all monetary values (never float), serialized as strings in JSON
+- RBAC permissions: REPORT_VIEW (Owner, Manager, Financial Staff), REPORT_EXPORT (Owner, Manager)
 - Tenant isolation (all queries scoped by shop_id)
-- Decimal/Numeric(12,2) for all monetary values (never float)
-- Frontend: Billing Manager component on Application Detail page
-- Comprehensive test coverage
+- Date range presets: today, yesterday, last_7_days, last_30_days, this_month, last_month, this_year, custom
+- Date range validation (from_date ≤ to_date)
+- Voided billing exclusion from all financial aggregations
+- Frontend: 13-tab Reports dashboard with KPI cards, Recharts visualizations, table views, pagination, search/filter, CSV export
 
 ## Out of Scope
 
 **The following are intentionally future modules — DO NOT IMPLEMENT:**
 
-- SMS
-- WhatsApp
-- Notifications
-- Chat
-- Analytics
-- Reports
-- Subscriptions
-- Coupons
-- Offers
-- Appointments
-- Workflow redesign
+- Receipt generation (PDF)
+- Email/SMS delivery
+- GST/compliance reports
+- Advanced forecasting
+- Custom report builder
 
 ## Requirements & Implementation Status
 
 | Requirement | Details | Status |
 |-------------|---------|--------|
-| Billing model | Core billing entity with monetary fields using Decimal/Numeric(12,2) | ✅ Done (`backend/app/models/billing.py`) |
-| BillingItem model | Line items for service and non-service charges | ✅ Done (`backend/app/models/billing.py`) |
-| Payment model | Payment records with method tracking and reference handling | ✅ Done (`backend/app/models/billing.py`) |
-| Migration | Alembic migration creating billings, billing_items, payments tables with indexes, FKs, constraints | ✅ Done (`0008_create_billing_payment_tables.py`) |
-| Schemas | Pydantic schemas for billing/payment operations (BillingCreate, BillingUpdate, BillingResponse, BillingItemCreate, BillingItemUpdate, BillingItemResponse, PaymentCreate, PaymentUpdate, PaymentResponse, BillingCalculationPreview, InvoiceNumberResponse) | ✅ Done (`backend/app/modules/billing/schemas.py`) |
-| BillingService | Business logic for billing creation, calculation, invoice generation, price snapshots, concurrency protection | ✅ Done (`backend/app/modules/billing/service.py`) |
-| PaymentService | Business logic for payment creation, validation, reference handling, concurrency safety | ✅ Done (`backend/app/modules/billing/service.py`) |
-| RBAC | BILLING_* and PAYMENT_* permissions mapped to platform/shop roles | ✅ Done (`backend/app/core/roles.py`) |
-| Tenant validation | All billing/payment operations scoped to shop_id; cross-shop access blocked | ✅ Done |
-| Invoice number generation | Deterministic format INV-{SHOP_CODE}-{YEAR}-{SEQUENTIAL} with retry loop for uniqueness | ✅ Done |
-| Price snapshot | Service amount stored at billing creation to prevent price changes affecting existing bills | ✅ Done |
-| Concurrency protection | SELECT FOR UPDATE on billing during payment creation to prevent race conditions | ✅ Done |
-| Discount handling | Requires discount_reason when discount applied; supports fixed/percentage types | ✅ Done |
-| Reference handling | Digital payments require reference_number unless reference_exception with reason | ✅ Done |
-| Audit logging | All mutations (create, update, issue, void, payment create/update) logged via AuditService | ✅ Done |
-| Tests | Comprehensive async tests for billing/payment service methods and API endpoints | ✅ Done (to be added) |
-| Frontend types | TypeScript interfaces matching backend schemas | ✅ Done (`frontend/src/types/billing.ts`) |
-| Frontend component | BillingManager component with line items, discounts, payments, preview dialogs | ✅ Done (`frontend/components/billing/billing-manager.tsx`) |
-| Frontend integration | BillingManager embedded in Application Detail page with permission checks | ✅ Done (`frontend/app/dashboard/applications/[id]/page.tsx`) |
-| Frontend build | Next.js 15 production build passes with 0 errors | ✅ Done (`npm run build`) |
-| Docker verification | All container services up and healthy | ✅ Done |
+| Summary Report | Total billings, total amount, paid amount, outstanding amount, collection rate, total customers, total applications, paid/unpaid/void billing counts | ✅ Done (`get_summary_report`) |
+| Revenue Report | Total revenue, by_service, by_staff, by_category breakdowns | ✅ Done (`get_revenue_report`) |
+| Collection Report | Total collected, by_method breakdown, by_staff, by_period | ✅ Done (`get_collection_report`) |
+| Payment Method Analytics | Methods breakdown from collection report | ✅ Done (`get_payment_method_analytics`) |
+| Application Report | Total applications, by_status, by_service, by_staff, trend | ✅ Done (`get_application_report`) |
+| Service Report | Total services, by_category, usage_count, revenue_per_service | ✅ Done (`get_service_report`) |
+| Customer Report | Total customers, active/inactive, by_staff, revenue_per_customer | ✅ Done (`get_customer_report`) |
+| Staff Report | Total staff, applications_per_staff, revenue_per_staff, collection_per_staff | ✅ Done (`get_staff_report`) |
+| Outstanding Report | Outstanding items with filters (search, payment_status, pagination) | ✅ Done (`get_outstanding_report`) |
+| Billing Report | Total billings, issued/paid/void/partial/draft counts, amounts | ✅ Done (`get_billing_report`) |
+| Discount Report | Total discounts, by_type, by_staff, average discount | ✅ Done (`get_discount_report`) |
+| Financial Trend | Monthly trend: billings, revenue, collections, outstanding, billings_count | ✅ Done (`get_financial_trend`) |
+| Document Analytics | Total documents, by_status, by_category, verification_rate | ✅ Done (`get_document_analytics`) |
+| CSV Export | All 13 reports exportable as CSV with proper headers | ✅ Done (export endpoints) |
+| RBAC | REPORT_VIEW and REPORT_EXPORT permissions enforced | ✅ Done |
+| Tenant Isolation | shop_id scoping on all queries, cross-shop returns 403 | ✅ Done |
+| Decimal Precision | All monetary values use Decimal/Numeric(12,2) | ✅ Done |
+| Date Presets | 8 presets + custom range with validation | ✅ Done |
+| Frontend Dashboard | 13 tabs, KPI cards, Recharts (Bar/Line/Pie), CSV download | ✅ Done |
+| Tests | 28 automated tests covering all reports, isolation, presets, validation | ✅ Done (28/28 pass) |
 
 ## Implementation Checklist
 
 | Task | Status | Notes |
 |------|--------|-------|
-| [x] Billing model | ✅ Done | `backend/app/models/billing.py` with enums and check constraints |
-| [x] BillingItem model | ✅ Done | Line items table for service/non-service charges |
-| [x] Payment model | ✅ Done | Payment records with method tracking |
-| [x] Migration | ✅ Done | `0008_create_billing_payment_tables.py` |
-| [x] Schemas | ✅ Done | `backend/app/modules/billing/schemas.py` |
-| [x] BillingService | ✅ Done | Concurrency protection, price snapshots, invoice generation |
-| [x] PaymentService | ✅ Done | Reference handling, validation, concurrency safety |
-| [x] RBAC permissions | ✅ Done | BILLING_*, PAYMENT_* permissions mapped to roles |
-| [x] Tenant validation | ✅ Done | Shop-scoped queries throughout |
-| [x] Invoice number generation | ✅ Done | Deterministic format with retry loop |
-| [x] Price snapshot | ✅ Done | Service amount stored at creation time |
-| [x] Concurrency protection | ✅ Done | SELECT FOR UPDATE during payment processing |
-| [x] Discount handling | ✅ Fixed/percentage with reason requirement |
-| [x] Reference handling | ✅ Digital payments require reference unless exception |
-| [x] Audit logging | ✅ All mutations recorded via AuditService |
-| [x] Backend tests | ✅ To be added | Will create billing-specific test suite |
-| [x] Frontend types | ✅ Done | `frontend/src/types/billing.ts` |
-| [x] BillingManager component | ✅ Done | Line items, discounts, payments, preview dialogs |
-| [x] Application Detail integration | ✅ Done | Embedded with permission-based visibility |
-| [x] Frontend build | ✅ Done | `npm run build` successful |
+| [x] Reports module structure | ✅ Done | `backend/app/modules/reports/` |
+| [x] Schemas | ✅ Done | `backend/app/modules/reports/schemas.py` |
+| [x] ReportsService | ✅ Done | `backend/app/modules/reports/service.py` |
+| [x] Router with 26 endpoints | ✅ Done | `backend/app/modules/reports/router.py` |
+| [x] RBAC permissions | ✅ Done | REPORT_VIEW, REPORT_EXPORT in `roles.py` |
+| [x] Tenant isolation | ✅ Done | shop_id on all queries |
+| [x] Decimal precision | ✅ Done | Numeric(12,2) string serialization |
+| [x] Date presets | ✅ Done | 8 presets + custom |
+| [x] Voided billing exclusion | ✅ Done | billing_status != 'void' |
+| [x] CSV export | ✅ Done | 13 export endpoints |
+| [x] Frontend types | ✅ Done | `frontend/src/types/reports.ts` |
+| [x] Frontend API client | ✅ Done | `frontend/lib/api.ts` |
+| [x] 13-tab dashboard page | ✅ Done | `frontend/app/dashboard/reports/page.tsx` |
+| [x] Recharts visualizations | ✅ Done | BarChart, LineChart, PieChart |
+| [x] Date range picker | ✅ Done | Presets + custom |
+| [x] KPI metric cards | ✅ Done | Per-tab summary cards |
+| [x] Table views with pagination | ✅ Done | Search, filter, page controls |
+| [x] CSV download buttons | ✅ Done | Trigger export endpoints |
+| [x] Backend tests | ✅ Done | 28/28 pass in `test_reports.py` |
+| [x] Frontend build | ✅ Done | `npm run build` passes |
 | [x] Docker verification | ✅ Done | All services healthy |

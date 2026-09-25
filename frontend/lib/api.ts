@@ -699,3 +699,426 @@ export const billingApi = {
     return res.json();
   },
 };
+
+// ── Reports & Financial Analytics Types ──────────────────────────────────────
+
+// Date range presets
+export type DateRangePreset = "today" | "yesterday" | "last_7_days" | "last_30_days" | "this_month" | "last_month" | "this_year" | "custom";
+export type GroupByPeriod = "day" | "week" | "month";
+
+// Common request
+export interface DateRangeRequest {
+  preset: DateRangePreset;
+  from_date?: string;
+  to_date?: string;
+}
+
+// Summary Report
+export interface SummaryReportResponse {
+  total_customers: number;
+  new_customers: number;
+  total_applications: number;
+  new_applications: number;
+  completed_applications: number;
+  pending_applications: number;
+  total_billed: string;
+  total_collected: string;
+  outstanding_balance: string;
+  period_from: string;
+  period_to: string;
+}
+
+// Revenue Report
+export interface RevenueReportResponse {
+  period_from: string;
+  period_to: string;
+  total_billed: string;
+  total_collected: string;
+  total_outstanding: string;
+  total_discounts: string;
+  total_additional_charges: string;
+  invoice_count: number;
+}
+
+// Collection Report
+export interface CollectionMethodBreakdown {
+  method: string;
+  count: number;
+  total_amount: string;
+}
+
+export interface CollectionReportResponse {
+  period_from: string;
+  period_to: string;
+  total_collected: string;
+  payment_count: number;
+  average_payment: string;
+  by_method: CollectionMethodBreakdown[];
+}
+
+// ── Reports & Financial Analytics API (shop-scoped) ────────────────────────────
+
+export interface PaymentMethodAnalyticsResponse {
+  period_from: string;
+  period_to: string;
+  methods: CollectionMethodBreakdown[];
+}
+
+export interface ApplicationStatusBreakdown {
+  status: string;
+  count: number;
+}
+
+export interface ApplicationTrendPoint {
+  period: string;
+  count: number;
+}
+
+export interface ApplicationReportResponse {
+  period_from: string;
+  period_to: string;
+  total_applications: number;
+  by_status: ApplicationStatusBreakdown[];
+  trend: ApplicationTrendPoint[];
+}
+
+export interface ServiceReportItem {
+  service_id: number;
+  service_name: string;
+  application_count: number;
+  completed_count: number;
+  billed_amount: string;
+  collected_amount: string;
+  outstanding_amount: string;
+}
+
+export interface ServiceReportResponse {
+  period_from: string;
+  period_to: string;
+  services: ServiceReportItem[];
+}
+
+export interface CustomerReportResponse {
+  period_from: string;
+  period_to: string;
+  total_customers: number;
+  new_customers: number;
+  active_customers: number;
+  inactive_customers: number;
+  archived_customers: number;
+  customers_with_applications: number;
+  customers_with_unpaid_balances: number;
+  customers_with_completed_applications: number;
+}
+
+export interface StaffReportItem {
+  staff_id: number;
+  staff_name: string;
+  staff_email: string;
+  role: string;
+  applications_assigned: number;
+  applications_created: number;
+  applications_completed: number;
+  payments_recorded: number;
+  total_collected: string;
+}
+
+export interface StaffReportResponse {
+  period_from: string;
+  period_to: string;
+  staff: StaffReportItem[];
+}
+
+export interface OutstandingItem {
+  billing_id: number;
+  invoice_number: string;
+  application_number: string;
+  customer_name: string;
+  service_name: string;
+  total_amount: string;
+  paid_amount: string;
+  balance_amount: string;
+  payment_status: string;
+  billing_status: string;
+  invoice_date: string;
+}
+
+export interface OutstandingReportResponse {
+  period_from: string;
+  period_to: string;
+  items: OutstandingItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface BillingReportResponse {
+  period_from: string;
+  period_to: string;
+  total_invoices: number;
+  total_billed: string;
+  total_discounted: string;
+  total_additional_charges: string;
+  total_collected: string;
+  total_outstanding: string;
+}
+
+export interface DiscountReportResponse {
+  period_from: string;
+  period_to: string;
+  total_discount_amount: string;
+  invoices_with_discount: number;
+  by_date: { date: string; amount: string }[];
+}
+
+export interface FinancialTrendPoint {
+  period: string;
+  billed: string;
+  collected: string;
+}
+
+export interface FinancialTrendResponse {
+  period_from: string;
+  period_to: string;
+  group_by: GroupByPeriod;
+  trend: FinancialTrendPoint[];
+}
+
+export interface DocumentAnalyticsResponse {
+  period_from: string;
+  period_to: string;
+  total_documents: number;
+  verified: number;
+  rejected: number;
+  pending: number;
+  missing: number;
+}
+
+function buildDateRangeParams(params: DateRangeRequest): URLSearchParams {
+  const searchParams = new URLSearchParams();
+  searchParams.set("preset", params.preset);
+  if (params.from_date) searchParams.set("from_date", params.from_date);
+  if (params.to_date) searchParams.set("to_date", params.to_date);
+  return searchParams;
+}
+
+export const reportsApi = {
+  /** Get dashboard summary KPIs */
+  async getSummary(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<SummaryReportResponse> {
+    const searchParams = buildDateRangeParams(params);
+    const res = await apiFetch(`/shops/${shopId}/reports/summary?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to fetch summary report");
+    return res.json();
+  },
+
+  /** Get revenue report */
+  async getRevenue(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<RevenueReportResponse> {
+    const searchParams = buildDateRangeParams(params);
+    const res = await apiFetch(`/shops/${shopId}/reports/revenue?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to fetch revenue report");
+    return res.json();
+  },
+
+  /** Get collection report */
+  async getCollection(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<CollectionReportResponse> {
+    const searchParams = buildDateRangeParams(params);
+    const res = await apiFetch(`/shops/${shopId}/reports/collection?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to fetch collection report");
+    return res.json();
+  },
+
+  /** Get payment method analytics */
+  async getPaymentMethods(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<PaymentMethodAnalyticsResponse> {
+    const searchParams = buildDateRangeParams(params);
+    const res = await apiFetch(`/shops/${shopId}/reports/payment-methods?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to fetch payment method analytics");
+    return res.json();
+  },
+
+  /** Get application analytics */
+  async getApplications(shopId: number, params: DateRangeRequest & { group_by?: GroupByPeriod } = { preset: "this_month" }): Promise<ApplicationReportResponse> {
+    const searchParams = buildDateRangeParams(params);
+    if (params.group_by) searchParams.set("group_by", params.group_by);
+    const res = await apiFetch(`/shops/${shopId}/reports/applications?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to fetch application report");
+    return res.json();
+  },
+
+  /** Get service-wise performance report */
+  async getServices(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<ServiceReportResponse> {
+    const searchParams = buildDateRangeParams(params);
+    const res = await apiFetch(`/shops/${shopId}/reports/services?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to fetch service report");
+    return res.json();
+  },
+
+  /** Get customer statistics */
+  async getCustomers(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<CustomerReportResponse> {
+    const searchParams = buildDateRangeParams(params);
+    const res = await apiFetch(`/shops/${shopId}/reports/customers?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to fetch customer report");
+    return res.json();
+  },
+
+  /** Get staff performance report */
+  async getStaff(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<StaffReportResponse> {
+    const searchParams = buildDateRangeParams(params);
+    const res = await apiFetch(`/shops/${shopId}/reports/staff?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to fetch staff report");
+    return res.json();
+  },
+
+  /** Get outstanding payments report */
+  async getOutstanding(shopId: number, params: DateRangeRequest & { page?: number; page_size?: number; search?: string; payment_status?: string } = { preset: "this_month" }): Promise<OutstandingReportResponse> {
+    const searchParams = buildDateRangeParams(params);
+    if (params.page) searchParams.set("page", String(params.page));
+    if (params.page_size) searchParams.set("page_size", String(params.page_size));
+    if (params.search) searchParams.set("search", params.search);
+    if (params.payment_status) searchParams.set("payment_status", params.payment_status);
+    const res = await apiFetch(`/shops/${shopId}/reports/outstanding?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to fetch outstanding report");
+    return res.json();
+  },
+
+  /** Get billing statistics */
+  async getBilling(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<BillingReportResponse> {
+    const searchParams = buildDateRangeParams(params);
+    const res = await apiFetch(`/shops/${shopId}/reports/billing?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to fetch billing report");
+    return res.json();
+  },
+
+  /** Get discount statistics */
+  async getDiscounts(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<DiscountReportResponse> {
+    const searchParams = buildDateRangeParams(params);
+    const res = await apiFetch(`/shops/${shopId}/reports/discounts?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to fetch discount report");
+    return res.json();
+  },
+
+  /** Get financial trend */
+  async getFinancialTrend(shopId: number, params: DateRangeRequest & { group_by?: GroupByPeriod } = { preset: "this_month" }): Promise<FinancialTrendResponse> {
+    const searchParams = buildDateRangeParams(params);
+    if (params.group_by) searchParams.set("group_by", params.group_by);
+    const res = await apiFetch(`/shops/${shopId}/reports/financial-trend?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to fetch financial trend");
+    return res.json();
+  },
+
+  /** Get document analytics */
+  async getDocuments(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<DocumentAnalyticsResponse> {
+    const searchParams = buildDateRangeParams(params);
+    const res = await apiFetch(`/shops/${shopId}/reports/documents?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to fetch document analytics");
+    return res.json();
+  },
+
+  /** Export summary as CSV */
+  async exportSummaryCsv(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<Blob> {
+    const searchParams = buildDateRangeParams(params);
+    const res = await apiFetch(`/shops/${shopId}/reports/export/summary?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to export summary");
+    return res.blob();
+  },
+
+  /** Export revenue as CSV */
+  async exportRevenueCsv(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<Blob> {
+    const searchParams = buildDateRangeParams(params);
+    const res = await apiFetch(`/shops/${shopId}/reports/export/revenue?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to export revenue");
+    return res.blob();
+  },
+
+  /** Export collection as CSV */
+  async exportCollectionCsv(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<Blob> {
+    const searchParams = buildDateRangeParams(params);
+    const res = await apiFetch(`/shops/${shopId}/reports/export/collection?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to export collection");
+    return res.blob();
+  },
+
+  /** Export outstanding as CSV */
+  async exportOutstandingCsv(shopId: number, params: DateRangeRequest & { search?: string; payment_status?: string } = { preset: "this_month" }): Promise<Blob> {
+    const searchParams = buildDateRangeParams(params);
+    if (params.search) searchParams.set("search", params.search);
+    if (params.payment_status) searchParams.set("payment_status", params.payment_status);
+    const res = await apiFetch(`/shops/${shopId}/reports/export/outstanding?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to export outstanding");
+    return res.blob();
+  },
+
+  /** Export payment methods as CSV */
+  async exportPaymentMethodsCsv(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<Blob> {
+    const searchParams = buildDateRangeParams(params);
+    const res = await apiFetch(`/shops/${shopId}/reports/export/payment-methods?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to export payment methods");
+    return res.blob();
+  },
+
+  /** Export billing as CSV */
+  async exportBillingCsv(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<Blob> {
+    const searchParams = buildDateRangeParams(params);
+    const res = await apiFetch(`/shops/${shopId}/reports/export/billing?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to export billing");
+    return res.blob();
+  },
+
+  /** Export discounts as CSV */
+  async exportDiscountsCsv(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<Blob> {
+    const searchParams = buildDateRangeParams(params);
+    const res = await apiFetch(`/shops/${shopId}/reports/export/discounts?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to export discounts");
+    return res.blob();
+  },
+
+  /** Export financial trend as CSV */
+  async exportFinancialTrendCsv(shopId: number, params: DateRangeRequest & { group_by?: GroupByPeriod } = { preset: "this_month" }): Promise<Blob> {
+    const searchParams = buildDateRangeParams(params);
+    if (params.group_by) searchParams.set("group_by", params.group_by);
+    const res = await apiFetch(`/shops/${shopId}/reports/export/financial-trend?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to export financial trend");
+    return res.blob();
+  },
+
+  /** Export applications as CSV */
+  async exportApplicationsCsv(shopId: number, params: DateRangeRequest & { group_by?: GroupByPeriod } = { preset: "this_month" }): Promise<Blob> {
+    const searchParams = buildDateRangeParams(params);
+    if (params.group_by) searchParams.set("group_by", params.group_by);
+    const res = await apiFetch(`/shops/${shopId}/reports/export/applications?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to export applications");
+    return res.blob();
+  },
+
+  /** Export services as CSV */
+  async exportServicesCsv(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<Blob> {
+    const searchParams = buildDateRangeParams(params);
+    const res = await apiFetch(`/shops/${shopId}/reports/export/services?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to export services");
+    return res.blob();
+  },
+
+  /** Export customers as CSV */
+  async exportCustomersCsv(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<Blob> {
+    const searchParams = buildDateRangeParams(params);
+    const res = await apiFetch(`/shops/${shopId}/reports/export/customers?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to export customers");
+    return res.blob();
+  },
+
+  /** Export staff as CSV */
+  async exportStaffCsv(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<Blob> {
+    const searchParams = buildDateRangeParams(params);
+    const res = await apiFetch(`/shops/${shopId}/reports/export/staff?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to export staff");
+    return res.blob();
+  },
+
+  /** Export documents as CSV */
+  async exportDocumentsCsv(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<Blob> {
+    const searchParams = buildDateRangeParams(params);
+    const res = await apiFetch(`/shops/${shopId}/reports/export/documents?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to export documents");
+    return res.blob();
+  },
+};

@@ -1,0 +1,1155 @@
+============================================================
+PHASE 6 — APPLICATION MANAGEMENT
+RECOVERY / PROGRESS AUDIT
+============================================================
+
+PROJECT:
+Business Management Portal
+
+IMPORTANT:
+
+The previous AI session was interrupted before Phase 6 was verified as complete.
+
+I do NOT know exactly how far Phase 6 progressed.
+
+Your job is NOT to restart Phase 6.
+
+Your job is to:
+
+INSPECT → ANALYZE → VERIFY → DETERMINE EXACT PROGRESS → UPDATE DOCUMENTATION → REPORT
+
+DO NOT IMPLEMENT NEW FEATURES unless a tiny documentation correction requires it.
+
+DO NOT continue development yet.
+
+DO NOT start Phase 7.
+
+============================================================
+1. PRIMARY OBJECTIVE
+============================================================
+
+Determine the EXACT current state of Phase 6 — Application Management Core.
+
+I need to know:
+
+1. What is completely implemented?
+2. What is partially implemented?
+3. What is only scaffolded?
+4. What is missing?
+5. What has actually been tested?
+6. What has only been written but NOT tested?
+7. What frontend functionality uses mock data?
+8. What frontend functionality uses the real API?
+9. What migrations exist?
+10. What remains before Phase 6 can be declared complete?
+
+DO NOT trust:
+
+- CURRENT_PHASE.md
+- PROJECT_STATUS.md
+- PHASE_HISTORY.md
+- previous AI summaries
+- comments saying "complete"
+- filenames alone
+
+The actual source code and actual test/build results are authoritative.
+
+============================================================
+2. READ CONTINUITY FILES FIRST
+============================================================
+
+Read:
+
+PROJECT_STATUS.md
+DEVELOPMENT_RULES.md
+PHASE_HISTORY.md
+CURRENT_PHASE.md
+
+These are useful context only.
+
+They are NOT proof of implementation.
+
+Compare their claims against the actual source code.
+
+If documentation is inaccurate:
+
+DO NOT blindly preserve it.
+
+Correct it based on the actual repository.
+
+============================================================
+3. INSPECT THE APPLICATION BACKEND
+============================================================
+
+Inspect all Phase 6 backend files.
+
+Search for:
+
+application
+Application
+ApplicationStatus
+application_number
+application_data
+assigned_staff_id
+APPLICATION_VIEW
+APPLICATION_CREATE
+APPLICATION_UPDATE
+APPLICATION_ASSIGN
+APPLICATION_STATUS_UPDATE
+AuditService
+
+Inspect:
+
+backend/app/models/application.py
+
+backend/app/modules/applications/
+
+backend/app/api/
+
+backend/app/core/
+
+backend/tests/test_applications.py
+
+backend/alembic/versions/
+
+============================================================
+4. VERIFY APPLICATION MODEL
+============================================================
+
+Verify whether Application actually contains:
+
+- id
+- shop_id
+- customer_id
+- service_id
+- application_number
+- status
+- assigned_staff_id
+- application_data
+- notes
+- created_at
+- updated_at
+
+Record the ACTUAL fields.
+
+Do not assume.
+
+Check:
+
+- types
+- nullable
+- defaults
+- foreign keys
+- relationships
+- indexes
+- constraints
+
+============================================================
+5. VERIFY DATABASE MIGRATION
+============================================================
+
+Inspect the actual Application migration.
+
+Determine:
+
+- migration filename
+- revision
+- down_revision
+- table name
+- foreign keys
+- indexes
+- unique constraints
+- status check constraint
+- delete behavior
+
+Check the migration chain.
+
+IMPORTANT:
+
+Do not modify migrations during this audit.
+
+Do not create a new migration.
+
+Do not reset the database.
+
+============================================================
+6. APPLICATION NUMBER
+============================================================
+
+Inspect how application numbers are generated.
+
+Determine:
+
+- format
+- uniqueness
+- whether generation is server-side
+- whether client can override it
+- whether concurrency is protected
+- whether MAX()+1 is used
+- whether retry logic exists
+- whether database uniqueness exists
+
+Report the exact implementation.
+
+Do NOT change it during this audit.
+
+============================================================
+7. STATUS WORKFLOW
+============================================================
+
+Inspect ApplicationStatus.
+
+Verify the actual values.
+
+Expected seven statuses are:
+
+ENQUIRY
+APPLIED
+DOCUMENTS_PENDING
+UNDER_PROCESSING
+COMPLETED
+REJECTED
+CANCELLED
+
+Check whether:
+
+- all seven exist
+- database constraint matches
+- API accepts only valid values
+- status transitions are validated
+- frontend uses the same values
+
+IMPORTANT:
+
+If frontend and backend differ, record it as a blocker.
+
+Do not silently fix it during this audit.
+
+============================================================
+8. CUSTOMER RELATIONSHIP
+============================================================
+
+Verify Application → Customer.
+
+Test/read code for:
+
+customer_id
+
+Confirm:
+
+customer must belong to the same shop.
+
+Check:
+
+customer.shop_id == application.shop_id
+
+Determine whether this is enforced:
+
+- service layer
+- router
+- database
+- tests
+
+Record actual protection.
+
+============================================================
+9. SERVICE RELATIONSHIP
+============================================================
+
+Verify Application → Service.
+
+Confirm:
+
+service.shop_id == application.shop_id
+
+Check:
+
+- active service behavior
+- inactive service behavior
+- archived service behavior
+- cross-shop rejection
+
+Record actual behavior.
+
+============================================================
+10. STAFF ASSIGNMENT
+============================================================
+
+Inspect:
+
+assigned_staff_id
+
+Verify:
+
+- same-shop staff validation
+- active membership validation
+- assign
+- reassign
+- unassign
+- cross-shop rejection
+
+Determine whether the frontend supports these features.
+
+============================================================
+11. DYNAMIC SERVICE FIELDS
+============================================================
+
+Inspect the integration between:
+
+ServiceField
+
+and:
+
+Application.application_data
+
+Verify actual support for:
+
+- TEXT
+- NUMBER
+- DATE
+- SELECT
+- TEXTAREA
+- BOOLEAN
+
+Check:
+
+- required fields
+- field type validation
+- select options
+- invalid fields
+- unknown fields
+- application data storage
+
+Determine whether validation is:
+
+BACKEND
+FRONTEND
+BOTH
+
+Do not assume frontend validation means backend validation.
+
+============================================================
+12. APPLICATION CRUD
+============================================================
+
+Inspect the actual API.
+
+Determine which endpoints exist.
+
+Expected conceptual endpoints:
+
+GET applications
+POST application
+GET application by ID
+PATCH application
+PATCH assign
+PATCH status
+
+Record:
+
+- actual route
+- HTTP method
+- permission
+- request schema
+- response schema
+- tenant validation
+
+============================================================
+13. APPLICATION RBAC
+============================================================
+
+Inspect the actual permission definitions.
+
+Determine whether dedicated Application permissions exist.
+
+Check whether the router actually uses them.
+
+Do not assume that defining a permission means it is enforced.
+
+Record:
+
+VIEW
+CREATE
+UPDATE
+ASSIGN
+STATUS
+
+or whatever actually exists.
+
+Also inspect role mappings.
+
+============================================================
+14. TENANT ISOLATION
+============================================================
+
+Inspect every ApplicationService method.
+
+Verify all queries/mutations are shop scoped.
+
+Look for:
+
+shop_id
+
+and whether the authenticated user's shop is actually enforced.
+
+Check for possible IDOR:
+
+GET another shop's application
+
+PATCH another shop's application
+
+assign another shop's application
+
+change another shop's status
+
+Do not modify anything.
+
+Only report findings.
+
+============================================================
+15. AUDIT LOGGING
+============================================================
+
+Inspect actual AuditService calls.
+
+Verify:
+
+create
+update
+assignment
+status change
+
+Check:
+
+- action
+- module
+- entity
+- actor
+- actor role
+- old values
+- new values
+- timestamp
+
+IMPORTANT:
+
+Do not assume an audit call exists just because the service imports AuditService.
+
+Inspect actual execution paths.
+
+============================================================
+16. BACKEND TESTS
+============================================================
+
+Inspect:
+
+backend/tests/test_applications.py
+
+Determine:
+
+- exact number of tests
+- what each test covers
+- whether assertions are meaningful
+- whether tests actually execute application code
+- whether tests use mocks or real PostgreSQL
+- whether tests cover tenant isolation
+- whether tests cover RBAC
+- whether tests cover API endpoints
+- whether tests cover service layer only
+
+DO NOT change tests.
+
+DO NOT delete tests.
+
+DO NOT add tests during this audit unless absolutely necessary to determine coverage.
+
+We first need an accurate status.
+
+============================================================
+17. ACTUALLY RUN TESTS
+============================================================
+
+Now execute the Application tests.
+
+For example:
+
+pytest backend/tests/test_applications.py
+
+or the project's actual test command.
+
+Record:
+
+total
+passed
+failed
+skipped
+errors
+
+Then run the COMPLETE backend test suite.
+
+Do NOT only run application tests.
+
+We need to know whether Phase 6 broke:
+
+Phase 3.1
+Phase 4
+Phase 5
+
+Record the exact result.
+
+If tests fail:
+
+DO NOT automatically fix them.
+
+This is an AUDIT.
+
+Record the failure.
+
+============================================================
+18. FRONTEND INSPECTION
+============================================================
+
+Inspect:
+
+frontend/app/dashboard/applications/
+
+and:
+
+frontend/src/types/application.ts
+
+Search for:
+
+ApplicationStatus
+applications
+mock
+dummy
+fake
+TODO
+API
+
+Determine actual status of:
+
+/dashboard/applications
+
+/dashboard/applications/new
+
+/dashboard/applications/[id]
+
+/dashboard/applications/[id]/edit
+
+============================================================
+19. FRONTEND API INTEGRATION
+============================================================
+
+For every Application page determine:
+
+REAL API
+or
+MOCK DATA
+
+Do not infer from UI appearance.
+
+Trace:
+
+component
+→ API client
+→ endpoint
+
+If it uses hardcoded arrays:
+
+mark:
+
+MOCK DATA
+
+If it calls the backend:
+
+mark:
+
+REAL API
+
+============================================================
+20. FRONTEND CREATE PAGE
+============================================================
+
+Inspect the create page.
+
+Determine whether:
+
+Customer selection uses real customer API.
+
+Service selection uses real service API.
+
+Staff selection uses real staff API.
+
+Service fields load from real ServiceField API.
+
+Submit calls real Application API.
+
+If any of these use mock data:
+
+record exactly which ones.
+
+============================================================
+21. FRONTEND LIST
+============================================================
+
+Verify:
+
+- search
+- status filter
+- service filter
+- staff filter
+- pagination
+- customer display
+- application number display
+- status display
+- real API
+
+Record actual state.
+
+============================================================
+22. DETAIL PAGE
+============================================================
+
+Check whether:
+
+frontend/app/dashboard/applications/[id]/page.tsx
+
+exists.
+
+If missing:
+
+mark NOT IMPLEMENTED.
+
+If present:
+
+inspect whether it uses real API.
+
+============================================================
+23. EDIT PAGE
+============================================================
+
+Check:
+
+frontend/app/dashboard/applications/[id]/edit/page.tsx
+
+If missing:
+
+mark NOT IMPLEMENTED.
+
+If present:
+
+inspect actual functionality.
+
+============================================================
+24. FRONTEND STATUS ENUM
+============================================================
+
+Compare:
+
+Backend ApplicationStatus
+
+against:
+
+Frontend ApplicationStatus
+
+They MUST match exactly.
+
+Expected backend values:
+
+enquiry
+applied
+documents_pending
+under_processing
+completed
+rejected
+cancelled
+
+If frontend has values such as:
+
+draft
+submitted
+in_review
+action_required
+approved
+
+and backend does not:
+
+mark as a frontend blocker.
+
+DO NOT fix it during this audit.
+
+============================================================
+25. FRONTEND BUILD
+============================================================
+
+Run the actual frontend production build.
+
+Example:
+
+cd frontend
+npm run build
+
+Record exact result.
+
+Do not claim build success unless it actually succeeds.
+
+============================================================
+26. RESPONSIVE UI
+============================================================
+
+Do not spend excessive time manually testing every page yet.
+
+First verify implementation exists.
+
+If browser testing infrastructure exists:
+
+check application pages.
+
+Otherwise:
+
+record:
+
+"Responsive behavior not fully verified during this audit."
+
+Do not falsely mark it complete.
+
+============================================================
+27. DOCKER VERIFICATION
+============================================================
+
+Inspect docker-compose configuration.
+
+If Docker is available:
+
+run the project.
+
+Verify:
+
+PostgreSQL
+Redis
+MinIO
+Backend
+Frontend
+
+Record actual health.
+
+Do not destroy volumes.
+
+Do not reset databases.
+
+============================================================
+28. GIT STATUS
+============================================================
+
+Run:
+
+git status
+
+git diff --stat
+
+git diff
+
+Determine:
+
+- which files were changed
+- whether Phase 6 changes are present
+- whether unrelated files changed
+- whether generated files/secrets are present
+
+DO NOT commit anything.
+
+DO NOT reset anything.
+
+DO NOT discard changes.
+
+============================================================
+29. DO NOT FIX IMPLEMENTATION
+============================================================
+
+THIS IS EXTREMELY IMPORTANT.
+
+This task is an AUDIT.
+
+Do NOT:
+
+- implement missing frontend pages
+- replace mock API
+- fix enum mismatch
+- rewrite backend
+- create new migrations
+- add new features
+- start Phase 7
+
+unless I explicitly ask you afterward.
+
+Your job is to determine the exact stopping point.
+
+============================================================
+30. UPDATE DOCUMENTATION
+============================================================
+
+After the audit, update:
+
+PROJECT_STATUS.md
+
+CURRENT_PHASE.md
+
+PHASE_HISTORY.md
+
+DEVELOPMENT_RULES.md should NOT be changed unless necessary.
+
+Update documentation to reflect ACTUAL verified state.
+
+Do not mark anything complete unless verified.
+
+============================================================
+31. CURRENT_PHASE.md FORMAT
+============================================================
+
+Rewrite the Phase 6 progress section using:
+
+# Phase 6 — Application Management Core
+
+## Status
+
+Choose exactly:
+
+NOT STARTED
+IN PROGRESS
+BLOCKED
+READY FOR VERIFICATION
+COMPLETE
+
+Do NOT use COMPLETE unless every requirement is verified.
+
+## Backend
+
+| Component | Status | Evidence |
+|---|---|---|
+| Model | | |
+| Migration | | |
+| Schemas | | |
+| Service | | |
+| RBAC | | |
+| Tenant isolation | | |
+| Application number | | |
+| Status workflow | | |
+| Dynamic fields | | |
+| Staff assignment | | |
+| API | | |
+| Audit | | |
+
+## Backend Tests
+
+| Test | Status |
+|---|---|
+| Application tests | |
+| Full test suite | |
+
+## Frontend
+
+| Component | Status |
+|---|---|
+| List | |
+| Create | |
+| Detail | |
+| Edit | |
+| Real API integration | |
+| Status alignment | |
+| Responsive | |
+
+## Build
+
+Frontend:
+
+Backend:
+
+## Docker
+
+PostgreSQL:
+
+Redis:
+
+MinIO:
+
+Backend:
+
+Frontend:
+
+## Git
+
+Changed files:
+
+Unrelated changes:
+
+## Blockers
+
+List exact blockers.
+
+## Remaining Work
+
+List only what is actually missing.
+
+## Next Step
+
+Give ONE clear next action.
+
+============================================================
+32. PROJECT_STATUS.md
+============================================================
+
+Update the Current Phase section so it reflects:
+
+Phase 6 is IN PROGRESS.
+
+Include:
+
+Backend progress
+
+Frontend progress
+
+Testing progress
+
+Build progress
+
+Docker progress
+
+Known blockers
+
+Do not say Phase 6 is complete.
+
+============================================================
+33. PHASE_HISTORY.md
+============================================================
+
+Update Phase 6 with:
+
+Status:
+
+IN PROGRESS
+
+Include:
+
+What is implemented
+
+What is partially implemented
+
+What is missing
+
+What has actually been verified
+
+What has NOT been verified
+
+============================================================
+34. IMPORTANT DISCOVERY FROM CURRENT SOURCE
+============================================================
+
+The current source appears to contain:
+
+backend/app/models/application.py
+
+backend/app/modules/applications/
+
+backend/tests/test_applications.py
+
+backend/alembic/versions/0006_create_application_table.py
+
+frontend/app/dashboard/applications/page.tsx
+
+frontend/app/dashboard/applications/new/page.tsx
+
+frontend/src/types/application.ts
+
+But DO NOT assume these files are complete.
+
+Verify their actual contents and behavior.
+
+============================================================
+35. EXPECTED CURRENT STATE — VERIFY, DON'T ASSUME
+============================================================
+
+The source appears to indicate:
+
+Backend:
+SUBSTANTIALLY IMPLEMENTED
+
+Frontend:
+PARTIALLY IMPLEMENTED
+
+Verification:
+NOT COMPLETE
+
+Potential frontend issues include:
+
+- mock data
+- status enum mismatch
+- missing detail page
+- missing edit page
+
+Potential verification issues:
+
+- application tests written but not executed
+- full test suite not executed
+- frontend build not executed
+- Docker not verified
+
+These are hypotheses from the interrupted development state.
+
+VERIFY THEM.
+
+============================================================
+36. FINAL REPORT
+============================================================
+
+Return exactly:
+
+# Phase 6 — Recovery Audit
+
+## Overall Status
+
+NOT STARTED / IN PROGRESS / BLOCKED / READY FOR VERIFICATION / COMPLETE
+
+## Exact Progress
+
+Give a concise percentage estimate ONLY if it is meaningful.
+
+Do not use percentage as a substitute for the checklist.
+
+## Backend
+
+### Model
+Status:
+
+### Migration
+Status:
+
+### Schemas
+Status:
+
+### Service
+Status:
+
+### RBAC
+Status:
+
+### Tenant Isolation
+Status:
+
+### Application Number
+Status:
+
+### Status Workflow
+Status:
+
+### Dynamic Fields
+Status:
+
+### Staff Assignment
+Status:
+
+### API
+Status:
+
+### Audit
+Status:
+
+## Frontend
+
+### Application List
+Status:
+
+### Application Create
+Status:
+
+### Application Detail
+Status:
+
+### Application Edit
+Status:
+
+### Real API Integration
+Status:
+
+### Status Enum
+Status:
+
+### Responsive
+Status:
+
+## Tests
+
+Application tests:
+
+Full backend suite:
+
+## Build
+
+Frontend:
+
+Backend:
+
+## Docker
+
+PostgreSQL:
+
+Redis:
+
+MinIO:
+
+Backend:
+
+Frontend:
+
+## Git
+
+Changed files:
+
+Potential unrelated changes:
+
+## What Is ACTUALLY Complete
+
+List only verified items.
+
+## What Is PARTIALLY Complete
+
+List only verified items.
+
+## What Is NOT Complete
+
+List only verified missing items.
+
+## Blockers
+
+List blockers in priority order.
+
+## Exact Next Step
+
+Give the single next logical implementation/verification step.
+
+## Documentation Updated
+
+- PROJECT_STATUS.md
+- CURRENT_PHASE.md
+- PHASE_HISTORY.md
+
+============================================================
+FINAL RULE
+============================================================
+
+DO NOT IMPLEMENT ANYTHING.
+
+DO NOT FIX ANYTHING.
+
+DO NOT START PHASE 7.
+
+DO NOT MARK PHASE 6 COMPLETE.
+
+ONLY:
+
+INSPECT
+VERIFY
+TEST
+DOCUMENT
+REPORT
+STOP
+============================================================

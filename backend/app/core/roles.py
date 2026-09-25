@@ -111,6 +111,10 @@ SERVICE_CREATE = "SERVICE_CREATE"
 SERVICE_UPDATE = "SERVICE_UPDATE"
 SERVICE_ARCHIVE = "SERVICE_ARCHIVE"
 
+# Report permissions (Phase 9)
+REPORT_VIEW = "REPORT_VIEW"
+REPORT_EXPORT = "REPORT_EXPORT"
+
 
 # ---------------------------------------------------------------------------
 # Role → permission mappings
@@ -227,6 +231,8 @@ SHOP_ROLE_PERMISSIONS: dict[ShopRole, frozenset[str]] = {
             SERVICE_CREATE,
             SERVICE_UPDATE,
             SERVICE_ARCHIVE,
+            REPORT_VIEW,
+            REPORT_EXPORT,
         }
     ),
     ShopRole.MANAGER: frozenset(
@@ -258,6 +264,8 @@ SHOP_ROLE_PERMISSIONS: dict[ShopRole, frozenset[str]] = {
             SERVICE_VIEW,
             SERVICE_CREATE,
             SERVICE_UPDATE,
+            REPORT_VIEW,
+            REPORT_EXPORT,
         }
     ),
     ShopRole.STAFF: frozenset(
@@ -275,6 +283,7 @@ SHOP_ROLE_PERMISSIONS: dict[ShopRole, frozenset[str]] = {
             DOCUMENT_VERIFY,
             DOCUMENT_REJECT,
             SERVICE_VIEW,
+            REPORT_VIEW,
         }
     ),
     ShopRole.FINANCIAL_STAFF: frozenset(
@@ -288,6 +297,8 @@ SHOP_ROLE_PERMISSIONS: dict[ShopRole, frozenset[str]] = {
             PAYMENT_CREATE,
             PAYMENT_UPDATE,
             SERVICE_VIEW,
+            REPORT_VIEW,
+            REPORT_EXPORT,
         }
     ),
 }

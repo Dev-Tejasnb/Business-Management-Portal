@@ -1,0 +1,1066 @@
+/**
+ * Lightweight API client for the backend.
+ *
+ * - Auth requests are proxied through Next.js API routes so the browser never
+ *   talks directly to the backend and HTTP-only cookies flow through the proxy.
+ * - Access tokens are held **only** in memory (never localStorage/sessionStorage)
+ *   to limit XSS exposure.
+ */
+
+let accessToken: string | null = null;
+let accessTokenExpiry: number | null = null;
+
+export function setAccessToken(token: string, expiresIn: number) {
+  accessToken = token;
+  // Set expiry slightly earlier to avoid using an about-to-expire token.
+  accessTokenExpiry = Date.now() + (expiresIn - 30) * 1000;
+}
+
+export function clearAccessToken() {
+  accessToken = null;
+  accessTokenExpiry = null;
+}
+
+export function getAccessToken(): string | null {
+  if (!accessToken || !accessTokenExpiry) return null;
+  if (Date.now() >= accessTokenExpiry) return null;
+  return accessToken;
+}
+
+// Base URL for Next.js API proxy routes (same origin).
+const AUTH_PROXY = "/api/auth";
+
+// Base URL for API calls via Next.js rewrites proxy to backend.
+// Uses /api/v1 which is rewritten to http://backend:8000/api/v1 by next.config.mjs
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
+
+/** Authenticated fetch against the backend API. */
+export async function apiFetch(
+  path: string,
+  init: RequestInit = {}
+): Promise<Response> {
+  const headers = new Headers(init.headers);
+  const token = getAccessToken();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  headers.set("Content-Type", "application/json");
+  return fetch(`${API_BASE}${path}`, { ...init, headers, credentials: "include" });
+}
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+export interface Shop {
+  id: number;
+  code: string;
+  name: string;
+  slug: string;
+  status: "active" | "inactive" | "suspended";
+  created_at: string;
+  updated_at: string;
+  primary_owner?: {
+    id: number;
+    email: string;
+    full_name: string;
+  } | null;
+}
+
+export interface ShopListResponse {
+  items: Shop[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface CreateShopPayload {
+  name: string;
+  slug: string;
+  owner_user_id?: number;
+}
+
+export interface UpdateShopPayload {
+  name?: string;
+  slug?: string;
+}
+
+export interface ShopManager {
+  id: number;
+  user_id: number;
+  shop_id: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  user: {
+    id: number;
+    email: string;
+    full_name: string;
+    platform_role: string;
+  };
+}
+
+export interface StaffMember {
+  membership_id: number;
+  user_id: number;
+  shop_id: number;
+  role: "shop_owner" | "shop_manager" | "staff" | "financial_staff";
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  user_email: string;
+  user_name: string;
+}
+
+export interface StaffListResponse {
+  items: StaffMember[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface CreateStaffPayload {
+  email: string;
+  full_name: string;
+  password: string;
+  role: "shop_manager" | "staff" | "financial_staff";
+}
+
+export interface UpdateStaffPayload {
+  full_name?: string;
+}
+
+export interface ChangeStaffRolePayload {
+  role: "shop_owner" | "shop_manager" | "staff" | "financial_staff";
+}
+
+export interface PaginatedParams {
+  page?: number;
+  page_size?: number;
+  search?: string;
+  role?: string;
+  status?: string;
+  is_active?: boolean;
+}
+
+// ── Auth API (proxied through Next.js for cookie management) ──────────────
+
+export interface AuthUser {
+  id: number;
+  email: string;
+  full_name: string;
+  platform_role: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LoginResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  user: AuthUser;
+}
+
+export async function login(
+  email: string,
+  password: string
+): Promise<LoginResponse> {
+  const res = await fetch(`${AUTH_PROXY}/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, body?.error?.message ?? "Login failed");
+  }
+  const data: LoginResponse = await res.json();
+  setAccessToken(data.access_token, data.expires_in);
+  return data;
+}
+
+export async function refreshToken(): Promise<LoginResponse | null> {
+  const res = await fetch(`${AUTH_PROXY}/refresh`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) return null;
+  const data: LoginResponse = await res.json();
+  setAccessToken(data.access_token, data.expires_in);
+  return data;
+}
+
+export async function logout(): Promise<void> {
+  await fetch(`${AUTH_PROXY}/logout`, {
+    method: "POST",
+    credentials: "include",
+    headers: accessToken
+      ? { Authorization: `Bearer ${accessToken}` }
+      : undefined,
+  });
+  clearAccessToken();
+}
+
+export async function fetchCurrentUser(): Promise<AuthUser> {
+  const token = getAccessToken();
+  if (!token) throw new ApiError(401, "Not authenticated");
+  const res = await fetch(`${AUTH_PROXY}/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+    credentials: "include",
+  });
+  if (!res.ok) throw new ApiError(res.status, "Failed to load user");
+  return res.json();
+}
+
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+// ── Platform Shops API ──────────────────────────────────────────────────────
+
+export const platformApi = {
+  /** List shops with search, status filter, pagination */
+  async listShops(params: PaginatedParams = {}): Promise<ShopListResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.page) searchParams.set("page", String(params.page));
+    if (params.page_size) searchParams.set("page_size", String(params.page_size));
+    if (params.search) searchParams.set("search", params.search);
+    if (params.status) searchParams.set("status", params.status);
+    const res = await apiFetch(`/platform/shops?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to list shops");
+    return res.json();
+  },
+
+  /** Create a new shop */
+  async createShop(payload: CreateShopPayload): Promise<Shop> {
+    const res = await apiFetch("/platform/shops", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, body?.error?.message ?? "Failed to create shop");
+    }
+    return res.json();
+  },
+
+  /** Get shop by ID */
+  async getShop(shopId: number): Promise<Shop> {
+    const res = await apiFetch(`/platform/shops/${shopId}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to fetch shop");
+    return res.json();
+  },
+
+  /** Update shop name/slug */
+  async updateShop(shopId: number, payload: UpdateShopPayload): Promise<Shop> {
+    const res = await apiFetch(`/platform/shops/${shopId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to update shop");
+    return res.json();
+  },
+
+  /** Activate a shop */
+  async activateShop(shopId: number): Promise<Shop> {
+    const res = await apiFetch(`/platform/shops/${shopId}/activate`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to activate shop");
+    return res.json();
+  },
+
+  /** Deactivate or suspend a shop */
+  async deactivateShop(shopId: number, status: "inactive" | "suspended" = "inactive"): Promise<Shop> {
+    const res = await apiFetch(`/platform/shops/${shopId}/deactivate`, {
+      method: "POST",
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to deactivate shop");
+    return res.json();
+  },
+
+  /** Change shop owner */
+  async changeOwner(shopId: number, newOwnerUserId: number): Promise<Shop> {
+    const res = await apiFetch(`/platform/shops/${shopId}/owner`, {
+      method: "POST",
+      body: JSON.stringify({ new_owner_user_id: newOwnerUserId }),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to change owner");
+    return res.json();
+  },
+
+  /** List assigned platform managers for a shop */
+  async listManagers(shopId: number): Promise<ShopManager[]> {
+    const res = await apiFetch(`/platform/shops/${shopId}/managers`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to list managers");
+    return res.json();
+  },
+
+  /** Assign a platform manager to a shop */
+  async assignManager(shopId: number, userId: number, isActive = true): Promise<ShopManager> {
+    const res = await apiFetch(`/platform/shops/${shopId}/managers`, {
+      method: "POST",
+      body: JSON.stringify({ user_id: userId, is_active: isActive }),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to assign manager");
+    return res.json();
+  },
+
+  /** Unassign a platform manager from a shop */
+  async unassignManager(shopId: number, userId: number): Promise<void> {
+    const res = await apiFetch(`/platform/shops/${shopId}/managers/${userId}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to unassign manager");
+  },
+
+  /** Update manager assignment status */
+  async updateManager(shopId: number, userId: number, isActive: boolean): Promise<ShopManager> {
+    const res = await apiFetch(`/platform/shops/${shopId}/managers/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ is_active: isActive }),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to update manager");
+    return res.json();
+  },
+};
+
+// ── Staff API (shop-scoped) ──────────────────────────────────────────────────
+
+export const staffApi = {
+  /** List staff members with search, role, active filters */
+  async listStaff(shopId: number, params: PaginatedParams = {}): Promise<StaffListResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.page) searchParams.set("page", String(params.page));
+    if (params.page_size) searchParams.set("page_size", String(params.page_size));
+    if (params.search) searchParams.set("search", params.search);
+    if (params.role) searchParams.set("role", params.role);
+    if (params.is_active !== undefined) searchParams.set("is_active", String(params.is_active));
+    const res = await apiFetch(`/shops/${shopId}/staff?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to list staff");
+    return res.json();
+  },
+
+  /** Create a new staff member */
+  async createStaff(shopId: number, payload: CreateStaffPayload): Promise<StaffMember> {
+    const res = await apiFetch(`/shops/${shopId}/staff`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, body?.error?.message ?? "Failed to create staff");
+    }
+    return res.json();
+  },
+
+  /** Get staff member by membership ID */
+  async getStaff(shopId: number, membershipId: number): Promise<StaffMember> {
+    const res = await apiFetch(`/shops/${shopId}/staff/${membershipId}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to fetch staff");
+    return res.json();
+  },
+
+  /** Update staff profile */
+  async updateStaff(shopId: number, membershipId: number, payload: UpdateStaffPayload): Promise<StaffMember> {
+    const res = await apiFetch(`/shops/${shopId}/staff/${membershipId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to update staff");
+    return res.json();
+  },
+
+  /** Change staff role */
+  async changeRole(shopId: number, membershipId: number, role: ChangeStaffRolePayload["role"]): Promise<StaffMember> {
+    const res = await apiFetch(`/shops/${shopId}/staff/${membershipId}/role`, {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to change role");
+    return res.json();
+  },
+
+  /** Activate staff membership */
+  async activateStaff(shopId: number, membershipId: number): Promise<StaffMember> {
+    const res = await apiFetch(`/shops/${shopId}/staff/${membershipId}/activate`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to activate staff");
+    return res.json();
+  },
+
+  /** Deactivate staff membership */
+  async deactivateStaff(shopId: number, membershipId: number): Promise<StaffMember> {
+    const res = await apiFetch(`/shops/${shopId}/staff/${membershipId}/deactivate`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to deactivate staff");
+    return res.json();
+  },
+};
+
+// ── Authenticated user's shop membership ──────────────────────────────────────
+
+export async function getMyMembership(shopId: number): Promise<StaffMember> {
+  const res = await apiFetch(`/shops/${shopId}/memberships/me`);
+  if (!res.ok) throw new ApiError(res.status, "Failed to fetch membership");
+  return res.json();
+}
+
+// ── Billing & Payments API (shop-scoped) ───────────────────────────────────────
+
+export interface BillingItemCreate {
+  name: string;
+  description?: string;
+  amount: number;
+  is_service_item: boolean;
+  service_id?: number;
+  sort_order: number;
+}
+
+export interface BillingItemUpdate {
+  name?: string;
+  description?: string;
+  amount?: number;
+  is_service_item?: boolean;
+  service_id?: number;
+  sort_order?: number;
+}
+
+export interface BillingItemResponse extends BillingItemCreate {
+  id: number;
+  billing_id: number;
+  created_at: string;
+  updated_at?: string;
+}
+
+export type PaymentMethod = "cash" | "upi" | "card" | "bank_transfer" | "other";
+export type PaymentStatus = "unpaid" | "partially_paid" | "paid";
+export type BillingStatus = "draft" | "issued" | "void";
+export type DiscountType = "fixed" | "percentage";
+
+export interface BillingCreate {
+  application_id: number;
+  items: BillingItemCreate[];
+  discount_type?: DiscountType;
+  discount_value?: number;
+  discount_reason?: string;
+  notes?: string;
+}
+
+export interface BillingUpdate {
+  notes?: string;
+  discount_type?: DiscountType;
+  discount_value?: number;
+  discount_reason?: string;
+}
+
+export interface BillingResponse {
+  id: number;
+  shop_id: number;
+  application_id: number;
+  customer_id: number;
+  invoice_number: string;
+  service_amount: number;
+  non_service_charges: number;
+  subtotal: number;
+  discount_type?: DiscountType;
+  discount_value?: number;
+  discount_amount: number;
+  discount_reason?: string;
+  total_amount: number;
+  amount_paid: number;
+  balance_amount: number;
+  payment_status: PaymentStatus;
+  billing_status: BillingStatus;
+  created_by: number;
+  updated_by?: number;
+  created_at: string;
+  updated_at?: string;
+  items: BillingItemResponse[];
+  application_number?: string;
+  customer_name?: string;
+  service_name?: string;
+}
+
+export interface BillingListResponse {
+  items: BillingResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface PaymentCreate {
+  amount: number;
+  payment_method: PaymentMethod;
+  reference_number?: string;
+  reference_exception: boolean;
+  reference_exception_reason?: string;
+  notes?: string;
+}
+
+export interface PaymentUpdate {
+  amount?: number;
+  payment_method?: PaymentMethod;
+  reference_number?: string;
+  reference_exception?: boolean;
+  reference_exception_reason?: string;
+  notes?: string;
+}
+
+export interface PaymentResponse {
+  id: number;
+  shop_id: number;
+  billing_id: number;
+  recorded_by: number;
+  paid_at: string;
+  created_at: string;
+  updated_at?: string;
+  amount: number;
+  payment_method: PaymentMethod;
+  reference_number?: string;
+  reference_exception: boolean;
+  reference_exception_reason?: string;
+  notes?: string;
+  recorder_name?: string;
+}
+
+export interface PaymentListResponse {
+  items: PaymentResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface BillingCalculationPreview {
+  service_amount: number;
+  non_service_charges: number;
+  subtotal: number;
+  discount_type?: DiscountType;
+  discount_value?: number;
+  discount_amount: number;
+  total_amount: number;
+}
+
+export const billingApi = {
+  /** Get billing for an application */
+  async getBilling(shopId: number, applicationId: number): Promise<BillingResponse | null> {
+    const res = await apiFetch(`/shops/${shopId}/applications/${applicationId}/billing`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new ApiError(res.status, "Failed to fetch billing");
+    return res.json();
+  },
+
+  /** Create billing for an application */
+  async createBilling(shopId: number, applicationId: number, payload: BillingCreate): Promise<BillingResponse> {
+    const res = await apiFetch(`/shops/${shopId}/applications/${applicationId}/billing`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, body?.error?.message ?? "Failed to create billing");
+    }
+    return res.json();
+  },
+
+  /** Update billing (notes, discount) */
+  async updateBilling(shopId: number, billingId: number, payload: BillingUpdate): Promise<BillingResponse> {
+    const res = await apiFetch(`/shops/${shopId}/applications/billing/${billingId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to update billing");
+    return res.json();
+  },
+
+  /** Issue billing (draft -> issued) */
+  async issueBilling(shopId: number, billingId: number): Promise<BillingResponse> {
+    const res = await apiFetch(`/shops/${shopId}/applications/billing/${billingId}/issue`, {
+      method: "POST",
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to issue billing");
+    return res.json();
+  },
+
+  /** Void billing */
+  async voidBilling(shopId: number, billingId: number): Promise<BillingResponse> {
+    const res = await apiFetch(`/shops/${shopId}/applications/billing/${billingId}/void`, {
+      method: "POST",
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to void billing");
+    return res.json();
+  },
+
+  /** Preview billing calculation */
+  async previewBilling(shopId: number, payload: { items: BillingItemCreate[]; discount_type?: DiscountType; discount_value?: number }): Promise<BillingCalculationPreview> {
+    const res = await apiFetch(`/shops/${shopId}/applications/billing/preview`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to preview billing");
+    return res.json();
+  },
+
+  /** List billing items */
+  async listBillingItems(shopId: number, billingId: number): Promise<BillingItemResponse[]> {
+    const res = await apiFetch(`/shops/${shopId}/applications/billing/${billingId}/items`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to list billing items");
+    return res.json();
+  },
+
+  /** Add billing item */
+  async addBillingItem(shopId: number, billingId: number, payload: BillingItemCreate): Promise<BillingItemResponse> {
+    const res = await apiFetch(`/shops/${shopId}/applications/billing/${billingId}/items`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to add billing item");
+    return res.json();
+  },
+
+  /** Update billing item */
+  async updateBillingItem(shopId: number, billingId: number, itemId: number, payload: BillingItemUpdate): Promise<BillingItemResponse> {
+    const res = await apiFetch(`/shops/${shopId}/applications/billing/${billingId}/items/${itemId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to update billing item");
+    return res.json();
+  },
+
+  /** Delete billing item */
+  async deleteBillingItem(shopId: number, billingId: number, itemId: number): Promise<void> {
+    const res = await apiFetch(`/shops/${shopId}/applications/billing/${billingId}/items/${itemId}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to delete billing item");
+  },
+
+  /** List payments for a billing */
+  async listPayments(shopId: number, billingId: number, params: { page?: number; page_size?: number } = {}): Promise<PaymentListResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.page) searchParams.set("page", String(params.page));
+    if (params.page_size) searchParams.set("page_size", String(params.page_size));
+    const res = await apiFetch(`/shops/${shopId}/applications/billing/${billingId}/payments?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to list payments");
+    return res.json();
+  },
+
+  /** Create payment */
+  async createPayment(shopId: number, billingId: number, payload: PaymentCreate): Promise<PaymentResponse> {
+    const res = await apiFetch(`/shops/${shopId}/applications/billing/${billingId}/payments`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, body?.error?.message ?? "Failed to create payment");
+    }
+    return res.json();
+  },
+
+  /** Get payment by ID */
+  async getPayment(shopId: number, billingId: number, paymentId: number): Promise<PaymentResponse> {
+    const res = await apiFetch(`/shops/${shopId}/applications/billing/${billingId}/payments/${paymentId}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to fetch payment");
+    return res.json();
+  },
+
+  /** Update payment */
+  async updatePayment(shopId: number, billingId: number, paymentId: number, payload: PaymentUpdate): Promise<PaymentResponse> {
+    const res = await apiFetch(`/shops/${shopId}/applications/billing/${billingId}/payments/${paymentId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to update payment");
+    return res.json();
+  },
+
+  /** Get next invoice number */
+  async getNextInvoiceNumber(shopId: number): Promise<{ invoice_number: string }> {
+    const res = await apiFetch(`/shops/${shopId}/applications/billing/next-invoice-number`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to get next invoice number");
+    return res.json();
+  },
+};
+
+// ── Reports & Financial Analytics API (shop-scoped) ────────────────────────────
+761	export interface PaymentMethodAnalyticsResponse {
+762	  period_from: string;
+763	  period_to: string;
+764	  methods: CollectionMethodBreakdown[];
+765	}
+766
+767	export interface ApplicationStatusBreakdown {
+768	  status: string;
+769	  count: number;
+770	}
+771
+772	export interface ApplicationTrendPoint {
+773	  period: string;
+774	  count: number;
+775	}
+776
+777	export interface ApplicationReportResponse {
+778	  period_from: string;
+779	  period_to: string;
+780	  total_applications: number;
+781	  by_status: ApplicationStatusBreakdown[];
+782	  trend: ApplicationTrendPoint[];
+783	}
+784
+785	export interface ServiceReportItem {
+786	  service_id: number;
+787	  service_name: string;
+788	  application_count: number;
+789	  completed_count: number;
+790	  billed_amount: string;
+791	  collected_amount: string;
+792	  outstanding_amount: string;
+793	}
+794
+795	export interface ServiceReportResponse {
+796	  period_from: string;
+797	  period_to: string;
+798	  services: ServiceReportItem[];
+799	}
+800
+801	export interface CustomerReportResponse {
+802	  period_from: string;
+803	  period_to: string;
+804	  total_customers: number;
+805	  new_customers: number;
+806	  active_customers: number;
+807	  inactive_customers: number;
+808	  archived_customers: number;
+809	  customers_with_applications: number;
+810	  customers_with_unpaid_balances: number;
+811	  customers_with_completed_applications: number;
+812	}
+813
+814	export interface StaffReportItem {
+815	  staff_id: number;
+816	  staff_name: string;
+817	  staff_email: string;
+818	  role: string;
+819	  applications_assigned: number;
+820	  applications_created: number;
+821	  applications_completed: number;
+822	  payments_recorded: number;
+823	  total_collected: string;
+824	}
+825
+826	export interface StaffReportResponse {
+827	  period_from: string;
+828	  period_to: string;
+829	  staff: StaffReportItem[];
+830	}
+831
+832	export interface OutstandingItem {
+833	  billing_id: number;
+834	  invoice_number: string;
+835	  application_number: string;
+836	  customer_name: string;
+837	  service_name: string;
+838	  total_amount: string;
+839	  paid_amount: string;
+840	  balance_amount: string;
+841	  payment_status: string;
+842	  billing_status: string;
+843	  invoice_date: string;
+844	}
+845
+846	export interface OutstandingReportResponse {
+847	  period_from: string;
+848	  period_to: string;
+849	  items: OutstandingItem[];
+850	  total: number;
+851	  page: number;
+852	  page_size: number;
+853	  total_pages: number;
+854	}
+855
+856	export interface BillingReportResponse {
+857	  period_from: string;
+858	  period_to: string;
+859	  total_invoices: number;
+860	  total_billed: string;
+861	  total_discounted: string;
+862	  total_additional_charges: string;
+863	  total_collected: string;
+864	  total_outstanding: string;
+865	}
+866
+867	export interface DiscountReportResponse {
+868	  period_from: string;
+869	  period_to: string;
+870	  total_discount_amount: string;
+871	  invoices_with_discount: number;
+872	  by_date: { date: string; amount: string }[];
+873	}
+874
+875	export interface FinancialTrendPoint {
+876	  period: string;
+877	  billed: string;
+878	  collected: string;
+879	}
+880
+881	export interface FinancialTrendResponse {
+882	  period_from: string;
+883	  period_to: string;
+884	  group_by: GroupByPeriod;
+885	  trend: FinancialTrendPoint[];
+886	}
+887
+888	export interface DocumentAnalyticsResponse {
+889	  period_from: string;
+890	  period_to: string;
+891	  total_documents: number;
+892	  verified: number;
+893	  rejected: number;
+894	  pending: number;
+895	  missing: number;
+896	}
+897
+898	function buildDateRangeParams(params: DateRangeRequest): URLSearchParams {
+899	  const searchParams = new URLSearchParams();
+900	  searchParams.set("preset", params.preset);
+901	  if (params.from_date) searchParams.set("from_date", params.from_date);
+902	  if (params.to_date) searchParams.set("to_date", params.to_date);
+903	  return searchParams;
+904	}
+905
+906	export const reportsApi = {
+907	  /** Get dashboard summary KPIs */
+908	  async getSummary(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<SummaryReportResponse> {
+909	    const searchParams = buildDateRangeParams(params);
+910	    const res = await apiFetch(`/shops/${shopId}/reports/summary?${searchParams.toString()}`);
+911	    if (!res.ok) throw new ApiError(res.status, "Failed to fetch summary report");
+912	    return res.json();
+913	  },
+914
+915	  /** Get revenue report */
+916	  async getRevenue(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<RevenueReportResponse> {
+917	    const searchParams = buildDateRangeParams(params);
+918	    const res = await apiFetch(`/shops/${shopId}/reports/revenue?${searchParams.toString()}`);
+919	    if (!res.ok) throw new ApiError(res.status, "Failed to fetch revenue report");
+920	    return res.json();
+921	  },
+922
+923	  /** Get collection report */
+924	  async getCollection(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<CollectionReportResponse> {
+925	    const searchParams = buildDateRangeParams(params);
+926	    const res = await apiFetch(`/shops/${shopId}/reports/collection?${searchParams.toString()}`);
+927	    if (!res.ok) throw new ApiError(res.status, "Failed to fetch collection report");
+928	    return res.json();
+929	  },
+930
+931	  /** Get payment method analytics */
+932	  async getPaymentMethods(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<PaymentMethodAnalyticsResponse> {
+933	    const searchParams = buildDateRangeParams(params);
+934	    const res = await apiFetch(`/shops/${shopId}/reports/payment-methods?${searchParams.toString()}`);
+935	    if (!res.ok) throw new ApiError(res.status, "Failed to fetch payment method analytics");
+936	    return res.json();
+937	  },
+938
+939	  /** Get application analytics */
+940	  async getApplications(shopId: number, params: DateRangeRequest & { group_by?: GroupByPeriod } = { preset: "this_month" }): Promise<ApplicationReportResponse> {
+941	    const searchParams = buildDateRangeParams(params);
+942	    if (params.group_by) searchParams.set("group_by", params.group_by);
+943	    const res = await apiFetch(`/shops/${shopId}/reports/applications?${searchParams.toString()}`);
+944	    if (!res.ok) throw new ApiError(res.status, "Failed to fetch application report");
+945	    return res.json();
+946	  },
+947
+948	  /** Get service-wise performance report */
+949	  async getServices(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<ServiceReportResponse> {
+950	    const searchParams = buildDateRangeParams(params);
+951	    const res = await apiFetch(`/shops/${shopId}/reports/services?${searchParams.toString()}`);
+952	    if (!res.ok) throw new ApiError(res.status, "Failed to fetch service report");
+953	    return res.json();
+954	  },
+955
+956	  /** Get customer statistics */
+957	  async getCustomers(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<CustomerReportResponse> {
+958	    const searchParams = buildDateRangeParams(params);
+959	    const res = await apiFetch(`/shops/${shopId}/reports/customers?${searchParams.toString()}`);
+960	    if (!res.ok) throw new ApiError(res.status, "Failed to fetch customer report");
+961	    return res.json();
+962	  },
+963
+964	  /** Get staff performance report */
+965	  async getStaff(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<StaffReportResponse> {
+966	    const searchParams = buildDateRangeParams(params);
+967	    const res = await apiFetch(`/shops/${shopId}/reports/staff?${searchParams.toString()}`);
+968	    if (!res.ok) throw new ApiError(res.status, "Failed to fetch staff report");
+969	    return res.json();
+970	  },
+971
+972	  /** Get outstanding payments report */
+973	  async getOutstanding(shopId: number, params: DateRangeRequest & { page?: number; page_size?: number; search?: string; payment_status?: string } = { preset: "this_month" }): Promise<OutstandingReportResponse> {
+974	    const searchParams = buildDateRangeParams(params);
+975	    if (params.page) searchParams.set("page", String(params.page));
+976	    if (params.page_size) searchParams.set("page_size", String(params.page_size));
+977	    if (params.search) searchParams.set("search", params.search);
+978	    if (params.payment_status) searchParams.set("payment_status", params.payment_status);
+979	    const res = await apiFetch(`/shops/${shopId}/reports/outstanding?${searchParams.toString()}`);
+980	    if (!res.ok) throw new ApiError(res.status, "Failed to fetch outstanding report");
+981	    return res.json();
+982	  },
+983
+984	  /** Get billing statistics */
+985	  async getBilling(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<BillingReportResponse> {
+986	    const searchParams = buildDateRangeParams(params);
+987	    const res = await apiFetch(`/shops/${shopId}/reports/billing?${searchParams.toString()}`);
+988	    if (!res.ok) throw new ApiError(res.status, "Failed to fetch billing report");
+989	    return res.json();
+990	  },
+991
+992	  /** Get discount statistics */
+993	  async getDiscounts(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<DiscountReportResponse> {
+994	    const searchParams = buildDateRangeParams(params);
+995	    const res = await apiFetch(`/shops/${shopId}/reports/discounts?${searchParams.toString()}`);
+996	    if (!res.ok) throw new ApiError(res.status, "Failed to fetch discount report");
+997	    return res.json();
+998	  },
+999
+1000	  /** Get financial trend */
+1001	  async getFinancialTrend(shopId: number, params: DateRangeRequest & { group_by?: GroupByPeriod } = { preset: "this_month" }): Promise<FinancialTrendResponse> {
+1002	    const searchParams = buildDateRangeParams(params);
+1003	    if (params.group_by) searchParams.set("group_by", params.group_by);
+1004	    const res = await apiFetch(`/shops/${shopId}/reports/financial-trend?${searchParams.toString()}`);
+1005	    if (!res.ok) throw new ApiError(res.status, "Failed to fetch financial trend");
+1006	    return res.json();
+1007	  },
+1008
+1009	  /** Get document analytics */
+1010	  async getDocuments(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<DocumentAnalyticsResponse> {
+1011	    const searchParams = buildDateRangeParams(params);
+1012	    const res = await apiFetch(`/shops/${shopId}/reports/documents?${searchParams.toString()}`);
+1013	    if (!res.ok) throw new ApiError(res.status, "Failed to fetch document analytics");
+1014	    return res.json();
+1015	  },
+1016
+1017	  /** Export summary as CSV */
+1018	  async exportSummaryCsv(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<Blob> {
+1019	    const searchParams = buildDateRangeParams(params);
+1020	    const res = await apiFetch(`/shops/${shopId}/reports/export/summary?${searchParams.toString()}`);
+1021	    if (!res.ok) throw new ApiError(res.status, "Failed to export summary");
+1022	    return res.blob();
+1023	  },
+1024
+1025	  /** Export revenue as CSV */
+1026	  async exportRevenueCsv(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<Blob> {
+1027	    const searchParams = buildDateRangeParams(params);
+1028	    const res = await apiFetch(`/shops/${shopId}/reports/export/revenue?${searchParams.toString()}`);
+1029	    if (!res.ok) throw new ApiError(res.status, "Failed to export revenue");
+1030	    return res.blob();
+1031	  },
+1032
+1033	  /** Export collection as CSV */
+1034	  async exportCollectionCsv(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<Blob> {
+1035	    const searchParams = buildDateRangeParams(params);
+1036	    const res = await apiFetch(`/shops/${shopId}/reports/export/collection?${searchParams.toString()}`);
+1037	    if (!res.ok) throw new ApiError(res.status, "Failed to export collection");
+1038	    return res.blob();
+1039	  },
+1040
+1041	  /** Export outstanding as CSV */
+1042	  async exportOutstandingCsv(shopId: number, params: DateRangeRequest & { search?: string; payment_status?: string } = { preset: "this_month" }): Promise<Blob> {
+1043	    const searchParams = buildDateRangeParams(params);
+1044	    if (params.search) searchParams.set("search", params.search);
+1045	    if (params.payment_status) searchParams.set("payment_status", params.payment_status);
+1046	    const res = await apiFetch(`/shops/${shopId}/reports/export/outstanding?${searchParams.toString()}`);
+1047	    if (!res.ok) throw new ApiError(res.status, "Failed to export outstanding");
+    return res.blob();
+  
+  /** Export payment methods as CSV */
+  async exportPaymentMethodsCsv(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<Blob> {
+    const searchParams = buildDateRangeParams(params);
+    const res = await apiFetch(`/shops/${shopId}/reports/export/payment-methods?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to export payment methods");
+    return res.blob();
+  },
+1050
+1051	  /** Export billing as CSV */
+1052	  async exportBillingCsv(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<Blob> {
+1053	    const searchParams = buildDateRangeParams(params);
+1054	    const res = await apiFetch(`/shops/${shopId}/reports/export/billing?${searchParams.toString()}`);
+1055	    if (!res.ok) throw new ApiError(res.status, "Failed to export billing");
+1056	    return res.blob();
+1057	  },
+1058
+1059	  /** Export discounts as CSV */
+1060	  async exportDiscountsCsv(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<Blob> {
+1061	    const searchParams = buildDateRangeParams(params);
+1062	    const res = await apiFetch(`/shops/${shopId}/reports/export/discounts?${searchParams.toString()}`);
+1063	    if (!res.ok) throw new ApiError(res.status, "Failed to export discounts");
+1064	    return res.blob();
+1065	  },
+1066
+1067	  /** Export financial trend as CSV */
+1068	  async exportFinancialTrendCsv(shopId: number, params: DateRangeRequest & { group_by?: GroupByPeriod } = { preset: "this_month" }): Promise<Blob> {
+1069	    const searchParams = buildDateRangeParams(params);
+1070	    if (params.group_by) searchParams.set("group_by", params.group_by);
+1071	    const res = await apiFetch(`/shops/${shopId}/reports/export/financial-trend?${searchParams.toString()}`);
+1072	    if (!res.ok) throw new ApiError(res.status, "Failed to export financial trend");
+1073	    return res.blob();
+1074	  },
+1075
+1076	  /** Export applications as CSV */
+1077	  async exportApplicationsCsv(shopId: number, params: DateRangeRequest & { group_by?: GroupByPeriod } = { preset: "this_month" }): Promise<Blob> {
+1078	    const searchParams = buildDateRangeParams(params);
+1079	    if (params.group_by) searchParams.set("group_by", params.group_by);
+1080	    const res = await apiFetch(`/shops/${shopId}/reports/export/applications?${searchParams.toString()}`);
+1081	    if (!res.ok) throw new ApiError(res.status, "Failed to export applications");
+1082	    return res.blob();
+1083	  },
+1084
+1085	  /** Export services as CSV */
+1086	  async exportServicesCsv(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<Blob> {
+1087	    const searchParams = buildDateRangeParams(params);
+1088	    const res = await apiFetch(`/shops/${shopId}/reports/export/services?${searchParams.toString()}`);
+1089	    if (!res.ok) throw new ApiError(res.status, "Failed to export services");
+1090	    return res.blob();
+1091	  },
+1092
+1093	  /** Export customers as CSV */
+1094	  async exportCustomersCsv(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<Blob> {
+1095	    const searchParams = buildDateRangeParams(params);
+1096	    const res = await apiFetch(`/shops/${shopId}/reports/export/customers?${searchParams.toString()}`);
+1097	    if (!res.ok) throw new ApiError(res.status, "Failed to export customers");
+1098	    return res.blob();
+1099	  },
+1100
+1101	  /** Export staff as CSV */
+1102	  async exportStaffCsv(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<Blob> {
+1103	    const searchParams = buildDateRangeParams(params);
+1104	    const res = await apiFetch(`/shops/${shopId}/reports/export/staff?${searchParams.toString()}`);
+1105	    if (!res.ok) throw new ApiError(res.status, "Failed to export staff");
+1106	    return res.blob();
+1107	  },
+1108
+1109	  /** Export documents as CSV */
+1110	  async exportDocumentsCsv(shopId: number, params: DateRangeRequest = { preset: "this_month" }): Promise<Blob> {
+1111	    const searchParams = buildDateRangeParams(params);
+1112	    const res = await apiFetch(`/shops/${shopId}/reports/export/documents?${searchParams.toString()}`);
+1113	    if (!res.ok) throw new ApiError(res.status, "Failed to export documents");
+1114	    return res.blob();
+1115	  },
+1116	};

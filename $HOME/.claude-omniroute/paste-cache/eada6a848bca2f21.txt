@@ -1,0 +1,1689 @@
+============================================================
+PHASE 7 — DOCUMENT MANAGEMENT
+============================================================
+
+PROJECT:
+Business Management Portal
+
+============================================================
+CURRENT VERIFIED STATE
+============================================================
+
+The following phases are COMPLETE AND VERIFIED:
+
+Phase 3.1 — Security / RBAC / Multi-Tenancy
+Phase 4 — Service Management
+Phase 5 — Customer Management
+Phase 5.1 — Customer Final Verification
+Phase 6 — Application Management Core
+
+Phase 6 final verification:
+
+- Backend complete
+- 23 Application-specific tests passing
+- Full backend suite: 113/113 passing
+- Frontend build passing
+- 19 frontend routes generated
+- Docker services healthy
+- PostgreSQL healthy
+- Redis healthy
+- MinIO healthy
+- Backend healthy
+- Frontend healthy
+- Application RBAC verified
+- Application tenant isolation verified
+- Application audit logging verified
+
+DO NOT REIMPLEMENT COMPLETED PHASES.
+
+============================================================
+PHASE 7 OBJECTIVE
+============================================================
+
+Implement:
+
+DOCUMENT MANAGEMENT
+
+The business flow becomes:
+
+Customer
+    ↓
+Application
+    ↓
+Service
+    ↓
+Required Documents
+    ↓
+Actual Uploaded Documents
+    ↓
+Verification / Status
+    ↓
+Secure Access
+
+Phase 4 already defines:
+
+ServiceRequiredDocument
+
+Phase 6 already defines:
+
+Application
+Customer
+Service
+
+Phase 7 connects those existing definitions to actual uploaded files.
+
+============================================================
+CRITICAL SCOPE
+============================================================
+
+THIS PHASE IS DOCUMENT MANAGEMENT ONLY.
+
+DO NOT IMPLEMENT:
+
+- Payments
+- Billing
+- Invoices
+- Receipts
+- Discounts
+- Non-service charges
+- SMS
+- WhatsApp
+- Notifications
+- Customer chat
+- Staff chat
+- Analytics
+- Reports
+- Subscriptions
+- Coupons
+- Offers
+- Appointment system
+- Application workflow redesign
+- Customer portal redesign
+
+Do not modify Application Management unnecessarily.
+
+============================================================
+1. FIRST — READ PROJECT CONTINUITY FILES
+============================================================
+
+Before coding, read:
+
+PROJECT_STATUS.md
+DEVELOPMENT_RULES.md
+PHASE_HISTORY.md
+CURRENT_PHASE.md
+
+Then inspect the actual repository.
+
+DO NOT trust documentation blindly.
+
+Verify existing implementation.
+
+============================================================
+2. INSPECT EXISTING DOCUMENT-RELATED CODE
+============================================================
+
+Search for:
+
+Document
+documents
+ServiceRequiredDocument
+required_documents
+MinIO
+S3
+object_storage
+signed_url
+presigned
+file_upload
+upload
+storage_key
+
+Inspect:
+
+backend/app/core/minio.py
+backend/app/models/
+backend/app/modules/services/
+backend/app/modules/applications/
+backend/tests/
+frontend/
+
+Determine exactly how MinIO is currently configured.
+
+DO NOT replace the existing storage architecture.
+
+============================================================
+3. IMPORTANT DISTINCTION
+============================================================
+
+Phase 4 already has:
+
+SERVICE REQUIRED DOCUMENT DEFINITIONS
+
+Example:
+
+PAN Card Service
+
+Required Documents:
+
+- Aadhaar Card
+- Photograph
+- Signature
+
+Those are DEFINITIONS.
+
+Phase 7 creates the ACTUAL DOCUMENT RECORDS.
+
+Example:
+
+Application:
+SMC-2026-000001
+
+Actual documents:
+
+Aadhaar.pdf
+Photo.jpg
+Signature.png
+
+Do NOT duplicate ServiceRequiredDocument.
+
+============================================================
+4. DOCUMENT MODEL
+============================================================
+
+Create a Document model following existing project conventions.
+
+Suggested fields:
+
+Document
+
+- id
+- shop_id
+- application_id
+- required_document_id
+- uploaded_by
+- original_filename
+- storage_key
+- mime_type
+- file_size
+- status
+- notes
+- created_at
+- updated_at
+- verified_at
+- verified_by
+
+Use only fields that are actually necessary.
+
+Do not blindly copy this schema.
+
+Inspect existing architecture first.
+
+============================================================
+5. DOCUMENT RELATIONSHIPS
+============================================================
+
+Document belongs to:
+
+ONE Shop
+
+ONE Application
+
+OPTIONALLY ONE ServiceRequiredDocument
+
+ONE uploader
+
+Application:
+
+Application
+ └── Documents
+
+Service:
+
+Service
+ └── Required Document Definitions
+
+Required Document:
+
+ServiceRequiredDocument
+ └── Actual Application Documents
+
+Do not allow cross-shop relationships.
+
+============================================================
+6. TENANT ISOLATION — CRITICAL
+============================================================
+
+Every Document MUST contain:
+
+shop_id
+
+Every query must enforce tenant isolation.
+
+Verify:
+
+document.shop_id
+==
+application.shop_id
+
+Never trust client-provided:
+
+shop_id
+
+The backend must derive shop context from authentication/membership.
+
+============================================================
+7. APPLICATION VALIDATION
+============================================================
+
+When uploading a document:
+
+application_id MUST belong to the current shop.
+
+The application must exist.
+
+The application must not belong to another shop.
+
+Example:
+
+Shop A
+
+Application A
+
+Shop B
+
+Application B
+
+Shop A user attempts upload to:
+
+Application B
+
+Expected:
+
+REJECTED.
+
+Test this.
+
+============================================================
+8. REQUIRED DOCUMENT VALIDATION
+============================================================
+
+If the document is linked to:
+
+required_document_id
+
+verify that the required document belongs to the same Service as the Application.
+
+Example:
+
+Application:
+PAN Card
+
+Required document:
+Aadhaar Card
+
+Allowed.
+
+But:
+
+Application:
+PAN Card
+
+Required document:
+Passport Photo from another service
+
+Must be rejected.
+
+Never trust the frontend.
+
+============================================================
+9. OPTIONAL DOCUMENTS
+============================================================
+
+The system must distinguish:
+
+Required documents
+
+Optional documents
+
+Use the existing:
+
+ServiceRequiredDocument
+
+configuration.
+
+Do not create another required-document system.
+
+============================================================
+10. DOCUMENT STATUS
+============================================================
+
+Use a controlled document lifecycle.
+
+Recommended:
+
+UPLOADED
+VERIFIED
+REJECTED
+
+Display:
+
+Uploaded
+Verified
+Rejected
+
+Do not create unnecessary statuses.
+
+The Application status remains separate.
+
+For example:
+
+Application:
+
+UNDER_PROCESSING
+
+Document:
+
+REJECTED
+
+These are independent concepts.
+
+============================================================
+11. DOCUMENT VERIFICATION
+============================================================
+
+Authorized staff should be able to:
+
+Verify document
+
+Reject document
+
+If rejected:
+
+require a reason.
+
+Example:
+
+"Image is unclear"
+
+"Wrong document"
+
+"Expired document"
+
+"Document does not match application"
+
+Do not silently reject without a reason.
+
+============================================================
+12. DOCUMENT REPLACEMENT
+============================================================
+
+Support replacing an uploaded document.
+
+Example:
+
+Old:
+
+aadhaar.pdf
+
+New:
+
+aadhaar-new.pdf
+
+Requirements:
+
+- preserve audit history
+- do not lose the record of the previous upload
+- safely replace/retire old storage object
+- avoid orphaned files
+- ensure the new file passes validation
+
+Do not simply overwrite a storage object without considering audit/history.
+
+============================================================
+13. FILE STORAGE
+============================================================
+
+Use the existing MinIO/S3-compatible storage architecture.
+
+Documents MUST be PRIVATE.
+
+NEVER expose:
+
+/uploads/documents/file.pdf
+
+as a public URL.
+
+Do not store sensitive documents in the frontend repository.
+
+Do not store document binaries directly in PostgreSQL.
+
+PostgreSQL stores metadata.
+
+MinIO stores the actual file.
+
+============================================================
+14. STORAGE KEY
+============================================================
+
+Storage keys should be generated server-side.
+
+Do not use the original filename as the storage key.
+
+Recommended conceptual structure:
+
+shops/{shop_id}/applications/{application_id}/documents/{document_id}/{safe_filename}
+
+The exact structure may differ if the existing MinIO helper already establishes a convention.
+
+Storage keys must prevent:
+
+- path traversal
+- collisions
+- tenant leakage
+
+============================================================
+15. FILE NAME SECURITY
+============================================================
+
+Original filename is metadata only.
+
+Never trust it for filesystem/object path construction.
+
+Reject or sanitize:
+
+../file
+..\file
+absolute paths
+control characters
+dangerous filenames
+
+Store a safe generated object key.
+
+============================================================
+16. FILE TYPE VALIDATION
+============================================================
+
+Validate files using BOTH:
+
+1. Extension
+2. MIME/content characteristics where practical
+
+Do not trust only:
+
+Content-Type
+
+because clients can forge it.
+
+The exact allowed file types should respect the existing:
+
+ServiceRequiredDocument.allowed_file_types
+
+configuration.
+
+Common allowed types may include:
+
+PDF
+JPG/JPEG
+PNG
+
+Do not automatically allow:
+
+EXE
+BAT
+CMD
+JS
+HTML
+SVG with active content
+
+unless there is a documented reason.
+
+============================================================
+17. FILE SIZE VALIDATION
+============================================================
+
+Respect:
+
+ServiceRequiredDocument.max_file_size_mb
+
+if configured.
+
+Enforce limits server-side.
+
+Do not allow unlimited uploads.
+
+Prevent excessively large request bodies.
+
+============================================================
+18. DOCUMENT UPLOAD
+============================================================
+
+Implement a secure upload endpoint.
+
+Conceptually:
+
+POST /applications/{application_id}/documents
+
+The exact route should follow existing project conventions.
+
+Upload should:
+
+1. authenticate
+2. authorize
+3. determine shop
+4. validate application
+5. validate required document
+6. validate file type
+7. validate file size
+8. generate document ID
+9. generate storage key
+10. upload to private MinIO
+11. create database metadata
+12. audit action
+13. return document metadata
+
+If database insertion fails after object upload:
+
+clean up the orphaned object.
+
+If object upload fails:
+
+do not create a fake database document.
+
+Avoid inconsistent DB/storage state.
+
+============================================================
+19. TRANSACTION / STORAGE CONSISTENCY
+============================================================
+
+MinIO is not part of the PostgreSQL transaction.
+
+Handle failure safely.
+
+Possible flow:
+
+Upload object
+↓
+Create DB record
+
+If DB fails:
+
+Delete uploaded object.
+
+If object upload fails:
+
+Do not create DB record.
+
+If practical, implement cleanup/retry behavior.
+
+Do not claim true atomicity between PostgreSQL and MinIO.
+
+============================================================
+20. SECURE DOWNLOAD
+============================================================
+
+Documents are PRIVATE.
+
+Users should not receive permanent public URLs.
+
+Use short-lived signed/presigned URLs OR a secure backend streaming endpoint.
+
+If using signed URLs:
+
+- short expiry
+- generated only after authorization
+- tenant checked first
+- application checked first
+- document checked first
+
+A user must never obtain a signed URL for another shop's document.
+
+============================================================
+21. DOCUMENT PREVIEW
+============================================================
+
+Frontend may support:
+
+PDF preview
+
+Image preview
+
+But only through authorized access.
+
+Do not make the MinIO bucket public for convenience.
+
+If browser preview cannot safely be supported for a file type:
+
+provide secure download instead.
+
+============================================================
+22. DOCUMENT DELETE
+============================================================
+
+Do NOT hard-delete document history by default.
+
+Use an appropriate lifecycle:
+
+ARCHIVED / DELETED
+
+or another controlled mechanism consistent with the project's audit/history model.
+
+Before implementing deletion, inspect existing business record conventions.
+
+If a document must be removed:
+
+- authorization required
+- database record lifecycle preserved if appropriate
+- storage object removed or retired safely
+- audit event generated
+
+Never allow ordinary staff to permanently destroy sensitive records unless explicitly permitted.
+
+============================================================
+23. DOCUMENT LIST
+============================================================
+
+Application document list should show:
+
+- document name
+- required document type
+- file type
+- file size
+- uploaded by
+- upload date
+- status
+- verification information
+- actions
+
+Do not expose:
+
+storage_key
+
+directly to the browser unless required.
+
+============================================================
+24. REQUIRED DOCUMENT CHECKLIST
+============================================================
+
+Application detail should show:
+
+Required Documents
+
+[✓] Aadhaar Card
+[ ] Photograph
+[✓] Signature
+
+The UI should distinguish:
+
+Required
+Optional
+Uploaded
+Missing
+Verified
+Rejected
+
+This is a document checklist only.
+
+Do not change Application status automatically in Phase 7 unless explicitly required.
+
+============================================================
+25. MISSING DOCUMENTS
+============================================================
+
+Calculate missing required documents from:
+
+ServiceRequiredDocument
+
+and:
+
+Application Documents
+
+Example:
+
+Required:
+
+Aadhaar
+Photo
+Signature
+
+Uploaded:
+
+Aadhaar
+
+Result:
+
+Photo → Missing
+Signature → Missing
+
+Do not duplicate this information manually.
+
+============================================================
+26. MULTIPLE FILES
+============================================================
+
+Determine whether one required document definition can have:
+
+one file
+
+or
+
+multiple files.
+
+Prefer one active document per required-document definition unless the existing requirements clearly require multiple.
+
+If multiple uploads are supported:
+
+define the behavior explicitly.
+
+Do not accidentally allow unlimited duplicates.
+
+============================================================
+27. DOCUMENT RBAC
+============================================================
+
+Create dedicated permissions.
+
+Do NOT reuse:
+
+CUSTOMER_*
+SERVICE_*
+APPLICATION_*
+
+Recommended:
+
+DOCUMENT_VIEW
+DOCUMENT_UPLOAD
+DOCUMENT_UPDATE
+DOCUMENT_VERIFY
+DOCUMENT_REJECT
+DOCUMENT_DELETE
+
+Only create permissions actually needed.
+
+Verify role mapping against the existing shop roles.
+
+Sensitive document access should be more restrictive than normal customer access.
+
+============================================================
+28. FINANCIAL STAFF
+============================================================
+
+Do not automatically grant document access to Financial Staff.
+
+Determine access based on business need and existing RBAC philosophy.
+
+Sensitive documents should not become visible merely because a user can view applications.
+
+Explicitly map permissions.
+
+============================================================
+29. AUDIT LOGGING
+============================================================
+
+Use the existing AuditService.
+
+Module:
+
+DOCUMENT
+
+Audit at minimum:
+
+document.uploaded
+document.replaced
+document.updated
+document.verified
+document.rejected
+document.deleted/archived
+
+depending on actual supported operations.
+
+Record:
+
+actor
+actor role
+shop
+document ID
+application ID
+old values
+new values
+timestamp
+
+============================================================
+30. AUDIT SENSITIVE DATA
+============================================================
+
+Do NOT put:
+
+document binary
+document contents
+signed URL
+secret storage credentials
+
+inside audit logs.
+
+For metadata changes, record metadata only.
+
+Example:
+
+old:
+
+{
+  "status": "uploaded"
+}
+
+new:
+
+{
+  "status": "verified"
+}
+
+============================================================
+31. DOCUMENT API
+============================================================
+
+Implement according to existing route conventions.
+
+Conceptual endpoints:
+
+POST
+/applications/{application_id}/documents
+
+GET
+/applications/{application_id}/documents
+
+GET
+/documents/{document_id}
+
+GET
+/documents/{document_id}/download
+
+PATCH
+/documents/{document_id}
+
+PATCH
+/documents/{document_id}/verify
+
+PATCH
+/documents/{document_id}/reject
+
+DELETE
+/documents/{document_id}
+
+Use exact existing API conventions where applicable.
+
+Do not create unnecessary duplicate endpoints.
+
+============================================================
+32. APPLICATION DETAIL INTEGRATION
+============================================================
+
+Extend the existing Application Detail page.
+
+Add:
+
+Documents section
+
+Do NOT redesign the existing application page unnecessarily.
+
+Existing Application functionality must continue working.
+
+============================================================
+33. DOCUMENT UPLOAD UI
+============================================================
+
+Create a clean upload interface.
+
+Show:
+
+Required Document Type
+Choose File
+Allowed File Types
+Maximum Size
+Upload button
+
+Before upload:
+
+show filename
+file size
+file type
+
+Backend remains authoritative.
+
+============================================================
+34. DOCUMENT STATUS UI
+============================================================
+
+Show badges:
+
+Uploaded
+Verified
+Rejected
+Missing
+
+Rejected documents should show rejection reason.
+
+============================================================
+35. DOCUMENT VERIFICATION UI
+============================================================
+
+Authorized users can:
+
+Verify
+
+Reject
+
+For rejection:
+
+open a small dialog:
+
+Rejection Reason
+[....................]
+
+Reject Document
+
+Reason is required.
+
+============================================================
+36. DOCUMENT DOWNLOAD UI
+============================================================
+
+Buttons:
+
+View
+Download
+
+Only display if user has permission.
+
+Do not expose permanent storage URLs.
+
+============================================================
+37. DOCUMENT DELETE UI
+============================================================
+
+Only show Delete/Archive if the user has permission.
+
+Confirm before destructive operation.
+
+Do not immediately permanently delete sensitive documents.
+
+============================================================
+38. FRONTEND ROUTES
+============================================================
+
+Use the existing Application UI.
+
+Potential routes:
+
+/dashboard/applications/[id]
+
+Optionally:
+
+/dashboard/documents
+
+only if a dedicated Document Center is justified by the existing architecture.
+
+Do NOT build a large separate Document Center if it is unnecessary for Phase 7.
+
+Application Detail integration is the primary UI.
+
+============================================================
+39. DOCUMENT CENTER DECISION
+============================================================
+
+For V1:
+
+Prefer application-centric document management.
+
+Meaning:
+
+Application
+ → Documents
+
+rather than:
+
+Global Document Center
+
+A global Document Center can be a future enhancement.
+
+Do not overbuild Phase 7.
+
+============================================================
+40. TENANT ISOLATION TESTS
+============================================================
+
+Mandatory:
+
+Shop A
+Application A
+Document A
+
+Shop B
+Application B
+Document B
+
+Shop A user:
+
+GET Document A
+→ allowed
+
+GET Document B
+→ rejected
+
+Download Document B
+→ rejected
+
+Verify Document B
+→ rejected
+
+Reject Document B
+→ rejected
+
+Delete Document B
+→ rejected
+
+Attempt signed URL for Document B
+→ rejected
+
+Search/list from Shop A
+→ Document B never appears
+
+============================================================
+41. REQUIRED DOCUMENT CROSS-SHOP TEST
+============================================================
+
+Shop A:
+
+Service A
+Required Document A
+
+Shop B:
+
+Service B
+Required Document B
+
+Shop A application attempts:
+
+required_document_id = Required Document B
+
+Expected:
+
+REJECTED.
+
+============================================================
+42. FILE SECURITY TESTS
+============================================================
+
+Test:
+
+valid PDF
+valid JPG
+valid PNG
+
+Invalid:
+
+EXE
+BAT
+CMD
+HTML
+malformed file
+oversized file
+
+Test filename:
+
+../../evil.pdf
+
+Expected:
+
+safe storage key
+
+No path traversal.
+
+============================================================
+43. STORAGE SECURITY TESTS
+============================================================
+
+Verify:
+
+bucket is private.
+
+Attempt direct public access.
+
+Expected:
+
+DENIED.
+
+Verify signed URL only works for authorized users.
+
+Verify short expiry.
+
+Do not make MinIO public to simplify development.
+
+============================================================
+44. DOCUMENT REPLACEMENT TEST
+============================================================
+
+Upload:
+
+document_v1.pdf
+
+Replace with:
+
+document_v2.pdf
+
+Verify:
+
+- current document is v2
+- old storage object handled safely
+- audit contains replacement
+- no orphaned object if cleanup succeeds
+- metadata correct
+
+============================================================
+45. DOCUMENT VERIFICATION TESTS
+============================================================
+
+Upload:
+
+UPLOADED
+
+Verify:
+
+VERIFIED
+
+Reject:
+
+REJECTED
+
+Reject requires:
+
+reason
+
+Verify invalid transitions are rejected where appropriate.
+
+============================================================
+46. DOCUMENT RBAC TESTS
+============================================================
+
+Test actual API behavior for:
+
+SHOP_OWNER
+SHOP_MANAGER
+STAFF
+FINANCIAL_STAFF
+
+Do not rely only on permission enum definitions.
+
+Verify each endpoint.
+
+============================================================
+47. DOCUMENT TEST SUITE
+============================================================
+
+Create:
+
+backend/tests/test_documents.py
+
+Minimum coverage:
+
+1. document upload
+2. document metadata
+3. document list
+4. document retrieval
+5. secure download
+6. required document validation
+7. optional document
+8. file type validation
+9. file size validation
+10. filename sanitization
+11. tenant isolation
+12. cross-shop application rejection
+13. cross-shop required-document rejection
+14. staff assignment/access rules
+15. RBAC
+16. verification
+17. rejection
+18. rejection reason required
+19. replacement
+20. archive/delete behavior
+21. audit logging
+22. MinIO failure handling
+23. database failure cleanup
+24. signed URL authorization
+
+Do not weaken existing tests.
+
+============================================================
+48. MINIO TESTING
+============================================================
+
+If tests run inside Docker:
+
+use the project's MinIO service.
+
+Do not require the developer to install MinIO separately on Windows.
+
+Verify:
+
+bucket creation
+private bucket
+upload
+download/signed URL
+delete/cleanup
+
+Use a dedicated test bucket/prefix if appropriate.
+
+Do not accidentally delete unrelated development files.
+
+============================================================
+49. DATABASE MIGRATION
+============================================================
+
+Create the next Alembic migration.
+
+Current known migration chain includes:
+
+0001
+0002
+0003
+0004
+0005
+0006
+
+Create:
+
+0007
+
+or the next correct revision based on the actual repository.
+
+Do NOT modify old migrations unnecessarily.
+
+Test:
+
+upgrade
+downgrade
+upgrade again
+
+Do not destroy existing Customer, Service, or Application data.
+
+============================================================
+50. FOREIGN KEY SAFETY
+============================================================
+
+Applications are historical business records.
+
+Do not allow document relationships to cause accidental cascading deletion of:
+
+Applications
+Customers
+Services
+
+Be careful with:
+
+ON DELETE CASCADE
+
+Only use it where appropriate.
+
+============================================================
+51. PERFORMANCE
+============================================================
+
+Document list queries must be:
+
+tenant scoped
+
+application scoped
+
+efficient.
+
+Avoid N+1 queries.
+
+Use indexes where justified:
+
+shop_id
+application_id
+required_document_id
+status
+created_at
+
+Do not add excessive indexes.
+
+============================================================
+52. SECURITY REVIEW
+============================================================
+
+Inspect for:
+
+IDOR
+tenant bypass
+signed URL leakage
+public bucket
+path traversal
+file upload bypass
+MIME spoofing
+oversized uploads
+malicious filenames
+mass assignment
+permission bypass
+cross-shop required document access
+storage key manipulation
+
+Backend must be authoritative.
+
+============================================================
+53. FRONTEND SECURITY
+============================================================
+
+Never trust:
+
+shop_id
+document_id
+application_id
+required_document_id
+role
+
+from the frontend.
+
+The backend must validate everything.
+
+============================================================
+54. REGRESSION PROTECTION
+============================================================
+
+After Phase 7 implementation:
+
+Run the COMPLETE backend test suite.
+
+Phase 3.1
+Phase 4
+Phase 5
+Phase 5.1
+Phase 6
+
+must remain passing.
+
+Do NOT delete tests.
+
+Do NOT weaken existing assertions.
+
+============================================================
+55. FRONTEND REGRESSION
+============================================================
+
+Verify existing pages still build:
+
+/login
+/dashboard
+/dashboard/staff
+/dashboard/services
+/dashboard/customers
+/dashboard/applications
+
+Then verify document functionality.
+
+============================================================
+56. DOCKER VERIFICATION
+============================================================
+
+Verify all existing services:
+
+postgres
+redis
+minio
+minio-init
+backend
+frontend
+
+are healthy.
+
+Do not reset volumes.
+
+Do not destroy existing MinIO data.
+
+============================================================
+57. DOCUMENTATION
+============================================================
+
+Update:
+
+PROJECT_STATUS.md
+CURRENT_PHASE.md
+PHASE_HISTORY.md
+
+During development, CURRENT_PHASE.md must show actual progress.
+
+Do NOT mark Phase 7 COMPLETE until final verification is performed.
+
+At meaningful checkpoints update:
+
+[ ] Model
+[ ] Migration
+[ ] Storage
+[ ] Upload
+[ ] Validation
+[ ] Download
+[ ] Verification
+[ ] Replacement
+[ ] RBAC
+[ ] Tenant isolation
+[ ] Audit
+[ ] Backend tests
+[ ] Frontend
+[ ] Build
+[ ] Docker
+[ ] Full regression suite
+
+============================================================
+58. IMPLEMENTATION ORDER
+============================================================
+
+Follow this order:
+
+1. Inspect existing MinIO implementation
+2. Inspect ServiceRequiredDocument
+3. Inspect Application
+4. Design Document model
+5. Create migration
+6. Implement storage abstraction using existing MinIO
+7. Implement document service
+8. Implement file validation
+9. Implement upload
+10. Implement metadata/list
+11. Implement secure download
+12. Implement verification/rejection
+13. Implement replacement
+14. Implement lifecycle/delete behavior
+15. Implement RBAC
+16. Implement audit
+17. Write tests
+18. Run document tests
+19. Run complete backend tests
+20. Implement frontend
+21. Build frontend
+22. Verify Docker
+23. Review git diff
+24. Update documentation
+25. STOP
+
+============================================================
+59. IMPORTANT — DO NOT OVERWRITE COMPLETED WORK
+============================================================
+
+Before modifying:
+
+Application
+Service
+Customer
+MinIO
+Audit
+RBAC
+
+inspect existing implementation.
+
+Reuse it.
+
+Do not replace working code.
+
+If an existing helper already provides:
+
+MinIO upload
+signed URLs
+bucket configuration
+
+reuse it.
+
+============================================================
+60. FINAL VERIFICATION CHECKLIST
+============================================================
+
+[ ] Document model
+[ ] Migration
+[ ] Application relationship
+[ ] Shop relationship
+[ ] Required document relationship
+[ ] Private MinIO storage
+[ ] Server-generated storage key
+[ ] Filename sanitization
+[ ] File type validation
+[ ] File size validation
+[ ] Upload
+[ ] List
+[ ] Metadata
+[ ] Secure download
+[ ] Signed URL authorization
+[ ] Verification
+[ ] Rejection
+[ ] Rejection reason
+[ ] Replacement
+[ ] Lifecycle/delete
+[ ] Required-document checklist
+[ ] Document RBAC
+[ ] Tenant isolation
+[ ] Cross-shop protection
+[ ] Audit
+[ ] MinIO cleanup
+[ ] Database integrity
+[ ] Application page integration
+[ ] Upload UI
+[ ] Preview/download UI
+[ ] Verification UI
+[ ] Responsive UI
+[ ] Document tests
+[ ] Full backend tests
+[ ] Frontend build
+[ ] Docker health
+[ ] Documentation updated
+[ ] No Phase 8+ functionality implemented
+
+============================================================
+61. FINAL REPORT
+============================================================
+
+Return:
+
+# Phase 7 — Document Management
+
+## Result
+
+PASS
+or
+PASS WITH FIXES
+or
+FAIL
+
+## Backend
+
+- Document model:
+- Migration:
+- Storage:
+- Upload:
+- Validation:
+- Download:
+- Verification:
+- Replacement:
+- Lifecycle:
+- RBAC:
+- Tenant isolation:
+- Audit:
+
+## API
+
+- Upload:
+- List:
+- Detail:
+- Download:
+- Update:
+- Verify:
+- Reject:
+- Delete/Archive:
+
+## Frontend
+
+- Application document section:
+- Upload:
+- Document list:
+- Preview/download:
+- Verify:
+- Reject:
+- Replacement:
+- Responsive:
+
+## Security
+
+- Private storage:
+- Signed URLs:
+- File validation:
+- Path traversal:
+- Tenant isolation:
+- RBAC:
+- IDOR:
+
+## Tests
+
+- Document tests:
+- Previous tests:
+- Total:
+- Passed:
+- Failed:
+- Skipped:
+
+## Docker
+
+- PostgreSQL:
+- Redis:
+- MinIO:
+- MinIO init:
+- Backend:
+- Frontend:
+
+## Issues Fixed
+
+Only genuine issues.
+
+## Remaining Issues
+
+Only genuine issues.
+
+## Scope Confirmation
+
+State exactly:
+
+"Phase 7 Document Management completed. No Payments, Billing, Notifications, Chat, Analytics, Subscriptions, Coupons, or other Phase 8+ modules were implemented."
+
+============================================================
+FINAL RULE
+============================================================
+
+INSPECT
+→ IMPLEMENT
+→ TEST
+→ SECURITY VERIFY
+→ FIX
+→ TEST AGAIN
+→ BUILD
+→ DOCKER VERIFY
+→ UPDATE DOCUMENTATION
+→ REVIEW DIFF
+→ REPORT
+→ STOP
+
+DO NOT START PHASE 8.
+============================================================

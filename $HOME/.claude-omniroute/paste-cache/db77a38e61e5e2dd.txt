@@ -1,0 +1,1854 @@
+============================================================
+PHASE 9 — REPORTS & FINANCIAL ANALYTICS
+============================================================
+
+PROJECT:
+Business Management Portal
+
+============================================================
+CURRENT VERIFIED STATE
+============================================================
+
+The following phases are COMPLETE AND VERIFIED:
+
+Phase 3.1 — Security / RBAC / Multi-Tenancy
+Phase 4   — Service Management
+Phase 5   — Customer Management
+Phase 5.1 — Customer Verification
+Phase 6   — Application Management
+Phase 7   — Document Management
+Phase 8   — Billing & Payments
+
+Latest verified Phase 8 state:
+
+- Billing model implemented
+- BillingItem model implemented
+- Payment model implemented
+- Decimal/Numeric(12,2) monetary values
+- Service price snapshots
+- Non-service charges
+- Fixed/percentage discounts
+- Payment methods
+- Partial payments
+- Full payments
+- Payment reference validation
+- Reference exception handling
+- Payment concurrency protection using SELECT FOR UPDATE
+- Tenant isolation
+- RBAC
+- Audit logging
+- 13 billing/payment REST endpoints
+- Frontend BillingManager
+- Billing integrated into Application details
+- Migration 0008 applied
+- Docker services healthy
+- 136/136 backend tests passing
+- Frontend production build passing
+- 19 frontend routes generated
+- Documentation updated
+- Git commit:
+  b79b48f
+  "Phase 8: Billing & Payments - Complete Implementation"
+
+DO NOT REIMPLEMENT COMPLETED PHASES.
+
+============================================================
+PHASE 9 OBJECTIVE
+============================================================
+
+Implement:
+
+REPORTS & FINANCIAL ANALYTICS
+
+The purpose of Phase 9 is to allow a shop to understand:
+
+- Applications
+- Customers
+- Services
+- Revenue
+- Payments
+- Outstanding balances
+- Payment methods
+- Staff activity/collections
+- Service performance
+- Daily/monthly business activity
+
+The analytics must be calculated from REAL database data.
+
+DO NOT create fake/demo statistics.
+
+============================================================
+CRITICAL SCOPE
+============================================================
+
+THIS PHASE IS REPORTS & ANALYTICS ONLY.
+
+DO NOT IMPLEMENT:
+
+- SMS
+- WhatsApp
+- Notifications
+- Chat
+- Customer chat
+- Staff chat
+- Subscription billing
+- SaaS subscription management
+- Coupons
+- Offers
+- Promotional campaigns
+- Payment gateways
+- Inventory
+- Payroll
+- GST filing
+- General ledger/accounting system
+- CRM automation
+- Appointment system
+- AI analytics
+- Predictive analytics
+- Machine learning
+- Complete UI redesign
+
+Do not start Phase 10+ functionality.
+
+============================================================
+1. FIRST — INSPECT THE PROJECT
+============================================================
+
+Before changing anything:
+
+Read:
+
+PROJECT_STATUS.md
+DEVELOPMENT_RULES.md
+PHASE_HISTORY.md
+CURRENT_PHASE.md
+
+Then inspect:
+
+backend/app/models/
+backend/app/modules/
+backend/app/core/
+backend/tests/
+backend/alembic/
+frontend/
+
+Search for existing:
+
+report
+analytics
+dashboard
+revenue
+payment
+billing
+application statistics
+customer statistics
+service statistics
+
+DO NOT assume reporting functionality does not already exist.
+
+If existing analytics/reporting code exists:
+
+inspect it first.
+
+Reuse correct existing architecture.
+
+============================================================
+2. DATABASE-FIRST ANALYTICS
+============================================================
+
+Analytics must be derived from actual database records.
+
+Primary sources:
+
+Customers
+Applications
+Services
+Billing
+Billing Items
+Payments
+Staff
+Documents where relevant
+
+Do NOT duplicate financial data unnecessarily.
+
+Do NOT create a second financial database.
+
+============================================================
+3. TENANT ISOLATION
+============================================================
+
+EVERY report must be tenant scoped.
+
+A Shop A user must never see:
+
+Shop B revenue
+Shop B customers
+Shop B applications
+Shop B payments
+Shop B staff activity
+Shop B service statistics
+
+Never trust frontend-provided shop_id for authorization.
+
+Use the existing tenant context.
+
+For shop users:
+
+authenticated membership determines tenant access.
+
+For platform users:
+
+respect the existing platform-role access model.
+
+============================================================
+4. REPORT PERMISSIONS
+============================================================
+
+Create dedicated reporting permissions if the existing permission
+architecture requires them.
+
+Recommended:
+
+REPORT_VIEW
+REPORT_EXPORT
+
+Do not automatically give every Staff member access to financial
+reports.
+
+Review existing role architecture.
+
+Suggested principle:
+
+Shop Owner:
+- Full reports
+- Financial reports
+- Export
+
+Shop Manager:
+- Operational reports
+- Financial reports according to permissions
+
+Financial Staff:
+- Financial reports
+
+Staff:
+- Only reports explicitly allowed by permission
+
+Backend authorization is mandatory.
+
+Do not rely on hiding menu items in the frontend.
+
+============================================================
+5. DATE RANGE FILTER
+============================================================
+
+All relevant reports should support date ranges.
+
+Support:
+
+Today
+Yesterday
+Last 7 Days
+Last 30 Days
+This Month
+Last Month
+This Year
+Custom Range
+
+Custom range:
+
+from
+to
+
+Use the correct timezone handling.
+
+Do not blindly interpret timestamps using server UTC when the
+business reporting date should be shop-local.
+
+Inspect the existing timezone architecture first.
+
+============================================================
+6. DATE FILTER SEMANTICS
+============================================================
+
+Clearly define which timestamp each report uses.
+
+Examples:
+
+Applications:
+application.created_at
+
+Customers:
+customer.created_at
+
+Payments:
+payment.created_at
+
+Billing:
+billing.created_at
+
+Do not silently mix:
+
+created_at
+updated_at
+payment date
+
+Use the correct timestamp for each metric.
+
+Document the decision.
+
+============================================================
+7. DASHBOARD SUMMARY
+============================================================
+
+Create an analytics/dashboard summary API.
+
+Conceptually:
+
+GET /api/v1/reports/summary
+
+Exact route should follow project conventions.
+
+Return useful KPI values such as:
+
+Total Customers
+New Customers
+Total Applications
+New Applications
+Completed Applications
+Pending Applications
+Total Billed
+Total Collected
+Outstanding Balance
+
+Example:
+
+Total Customers:
+248
+
+New Customers:
+23
+
+Applications:
+74
+
+Completed:
+51
+
+Total Billed:
+₹42,500
+
+Collected:
+₹36,000
+
+Outstanding:
+₹6,500
+
+DO NOT calculate these values in the frontend.
+
+Backend is authoritative.
+
+============================================================
+8. REVENUE REPORT
+============================================================
+
+Create a revenue report.
+
+Revenue should be based on actual billing/payment architecture.
+
+Clearly distinguish:
+
+Billed Amount
+Collected Amount
+Outstanding Amount
+
+DO NOT call unpaid invoices "revenue collected".
+
+For example:
+
+Billing total:
+₹10,000
+
+Payments received:
+₹7,000
+
+Outstanding:
+₹3,000
+
+Return these separately.
+
+============================================================
+9. COLLECTION REPORT
+============================================================
+
+Create collection statistics.
+
+Show:
+
+Total collected
+Number of payments
+Average payment
+Payment date range
+
+Breakdown by:
+
+Payment method
+
+Example:
+
+Cash:
+₹15,000
+
+UPI:
+₹28,000
+
+Card:
+₹7,500
+
+Bank Transfer:
+₹3,000
+
+Other:
+₹500
+
+Ensure the values come from Payment records.
+
+============================================================
+10. PAYMENT METHOD ANALYTICS
+============================================================
+
+Provide:
+
+payment method
+payment count
+total amount
+
+Methods:
+
+CASH
+UPI
+CARD
+BANK_TRANSFER
+OTHER
+
+Do not invent additional methods.
+
+============================================================
+11. APPLICATION ANALYTICS
+============================================================
+
+Report:
+
+Total applications
+
+Breakdown by status:
+
+ENQUIRY
+APPLIED
+DOCUMENTS_PENDING
+UNDER_PROCESSING
+COMPLETED
+REJECTED
+CANCELLED
+
+Example:
+
+ENQUIRY             10
+APPLIED             15
+DOCUMENTS_PENDING    8
+UNDER_PROCESSING    20
+COMPLETED           42
+REJECTED             3
+CANCELLED            2
+
+Use the exact existing Application status values.
+
+============================================================
+12. APPLICATION TREND
+============================================================
+
+Create application trend data.
+
+Example:
+
+Date       Applications
+01 Sep     5
+02 Sep     8
+03 Sep     4
+04 Sep     11
+
+Support grouping:
+
+Day
+Week
+Month
+
+Do not return thousands of individual records unnecessarily.
+
+Use database aggregation/grouping where practical.
+
+============================================================
+13. REVENUE/COLLECTION TREND
+============================================================
+
+Create financial trend data.
+
+Example:
+
+Date       Billed       Collected
+01 Sep     ₹2,500       ₹2,000
+02 Sep     ₹4,000       ₹3,500
+03 Sep     ₹3,000       ₹2,500
+
+Support:
+
+Daily
+Weekly
+Monthly
+
+Be explicit about the metric represented.
+
+Do not combine billed and collected into one ambiguous "revenue"
+number.
+
+============================================================
+14. SERVICE-WISE REPORT
+============================================================
+
+Show service performance.
+
+For each service:
+
+Service
+Application count
+Completed count
+Billed amount
+Collected amount
+Outstanding amount
+
+Example:
+
+PAN Card
+Applications: 32
+Completed: 28
+Billed: ₹8,000
+Collected: ₹7,500
+Outstanding: ₹500
+
+Use service price snapshots from billing where appropriate.
+
+Do not recalculate historical invoices from the current service price.
+
+============================================================
+15. CUSTOMER REPORT
+============================================================
+
+Provide customer statistics:
+
+Total customers
+New customers
+Active customers
+Inactive customers
+Archived customers
+
+Where appropriate:
+
+Customers with applications
+Customers with unpaid balances
+Customers with completed applications
+
+Respect existing Customer lifecycle/status values.
+
+============================================================
+16. STAFF REPORT
+============================================================
+
+Provide staff activity reporting where supported by actual data.
+
+Possible metrics:
+
+Applications assigned
+Applications created
+Applications completed
+Payments recorded
+Payment collection amount
+
+Do NOT invent staff activity from data that is not actually recorded.
+
+For every metric, identify the source field.
+
+Example:
+
+Payment collection by staff:
+
+staff member
+payment count
+total collected
+
+Use:
+
+payment.created_by / recorded_by
+
+only if that is the actual existing field.
+
+============================================================
+17. STAFF PERFORMANCE
+============================================================
+
+Do NOT create a "best staff" ranking.
+
+Reports should provide factual metrics only.
+
+Example:
+
+| Staff | Applications | Completed | Payments | Collected |
+|------|--------------|-----------|----------|-----------|
+| Staff A | 25 | 18 | 14 | ₹8,500 |
+| Staff B | 19 | 15 | 10 | ₹6,200 |
+
+Do not assign scores or rankings.
+
+============================================================
+18. OUTSTANDING REPORT
+============================================================
+
+Create an outstanding payments report.
+
+Show:
+
+Invoice
+Application
+Customer
+Total
+Paid
+Balance
+Payment status
+Invoice date
+
+Filter:
+
+UNPAID
+PARTIALLY_PAID
+
+Do not include PAID invoices in outstanding results.
+
+Support:
+
+search
+pagination
+date filtering
+
+============================================================
+19. BILLING REPORT
+============================================================
+
+Provide billing statistics:
+
+Total invoices
+Total billed
+Total discounted
+Total additional charges
+Total collected
+Total outstanding
+
+Be careful:
+
+Discounts should not be counted as revenue.
+
+Additional charges should be represented separately where useful.
+
+============================================================
+20. DISCOUNT REPORT
+============================================================
+
+Provide factual discount information.
+
+Metrics:
+
+Total discount amount
+Number of invoices with discounts
+Discount by date
+Discount by service if possible
+
+Do NOT rank staff by discounts.
+
+If staff identity is available:
+
+show factual totals only.
+
+============================================================
+21. DOCUMENT ANALYTICS
+============================================================
+
+Only include basic document statistics if the existing Document
+data makes this useful.
+
+Possible:
+
+Total documents
+Verified
+Rejected
+Pending/missing
+
+Do not create a separate document analytics architecture.
+
+============================================================
+22. REPORT API ARCHITECTURE
+============================================================
+
+Create a modular reporting module.
+
+Possible:
+
+backend/app/modules/reports/
+
+For example:
+
+router.py
+schemas.py
+service.py
+queries.py
+
+Use the project's existing module conventions.
+
+Keep business logic out of route handlers.
+
+============================================================
+23. API ENDPOINTS
+============================================================
+
+Create appropriate endpoints.
+
+Possible structure:
+
+GET /api/v1/reports/summary
+
+GET /api/v1/reports/revenue
+
+GET /api/v1/reports/collections
+
+GET /api/v1/reports/applications
+
+GET /api/v1/reports/customers
+
+GET /api/v1/reports/services
+
+GET /api/v1/reports/staff
+
+GET /api/v1/reports/outstanding
+
+GET /api/v1/reports/payment-methods
+
+Exact routes should follow the project's conventions.
+
+Do not create duplicate endpoints.
+
+============================================================
+24. REPORT QUERY PARAMETERS
+============================================================
+
+Where applicable:
+
+from_date
+to_date
+service_id
+staff_id
+application_status
+payment_method
+payment_status
+group_by
+
+Validate every parameter.
+
+Do not accept arbitrary SQL/order/filter expressions.
+
+============================================================
+25. PAGINATION
+============================================================
+
+For detailed reports:
+
+Use the existing pagination architecture.
+
+Default:
+
+10
+
+Maximum:
+
+100
+
+Do not return unlimited billing/payment/application records.
+
+Summary/aggregation endpoints may return fixed-size aggregated
+datasets.
+
+============================================================
+26. DATABASE PERFORMANCE
+============================================================
+
+Reports can become expensive.
+
+Inspect existing indexes.
+
+Use database aggregation rather than loading huge datasets into
+Python.
+
+Avoid:
+
+SELECT every payment
+→ Python loop
+→ calculate totals
+
+when PostgreSQL can safely aggregate the data.
+
+Use:
+
+COUNT
+SUM
+GROUP BY
+date truncation/grouping
+
+where appropriate.
+
+============================================================
+27. N+1 QUERY PROTECTION
+============================================================
+
+Avoid N+1 queries.
+
+For example:
+
+Do not:
+
+load 100 invoices
+→ query customer for each
+→ query service for each
+→ query payments for each
+
+Use appropriate joins/aggregation.
+
+============================================================
+28. FINANCIAL CALCULATION RULE
+============================================================
+
+Financial reports must use the existing billing/payment source of
+truth.
+
+Do not duplicate billing calculations.
+
+For example:
+
+Total Billed
+
+must use existing Billing totals.
+
+Total Collected
+
+must use actual Payment records.
+
+Outstanding:
+
+total billed - valid payments
+
+Use the existing backend billing/payment logic where possible.
+
+============================================================
+29. VOID/ARCHIVED DATA
+============================================================
+
+Inspect the Phase 8 implementation.
+
+Determine how voided/archived billing records are represented.
+
+Reports must follow the existing financial lifecycle.
+
+Do not accidentally include invalid/voided financial records in
+collected/billed totals.
+
+Document the inclusion/exclusion rules.
+
+============================================================
+30. PAYMENT STATUS
+============================================================
+
+Use exact existing values:
+
+UNPAID
+PARTIALLY_PAID
+PAID
+
+Do not create another payment status system.
+
+============================================================
+31. APPLICATION STATUS
+============================================================
+
+Use the exact existing values:
+
+ENQUIRY
+APPLIED
+DOCUMENTS_PENDING
+UNDER_PROCESSING
+COMPLETED
+REJECTED
+CANCELLED
+
+Do not duplicate them.
+
+============================================================
+32. FRONTEND REPORTS PAGE
+============================================================
+
+Create:
+
+/dashboard/reports
+
+Use the existing design system.
+
+Do NOT perform a complete UI redesign.
+
+The page should contain:
+
+Page header
+Date filter
+Quick date presets
+KPI cards
+Charts
+Tables
+Export actions if implemented
+
+============================================================
+33. KPI CARDS
+============================================================
+
+Example:
+
+┌──────────────────┐
+│ Customers        │
+│ 248              │
+│ +23 this month   │
+└──────────────────┘
+
+┌──────────────────┐
+│ Applications     │
+│ 74               │
+│ +12 this month   │
+└──────────────────┘
+
+┌──────────────────┐
+│ Billed           │
+│ ₹42,500          │
+└──────────────────┘
+
+┌──────────────────┐
+│ Collected        │
+│ ₹36,000          │
+└──────────────────┘
+
+┌──────────────────┐
+│ Outstanding      │
+│ ₹6,500           │
+└──────────────────┘
+
+Values must come from the backend.
+
+============================================================
+34. CHARTS
+============================================================
+
+Use the existing frontend chart library if one exists.
+
+If no chart library exists, use the project's existing dependency
+strategy rather than adding unnecessary packages.
+
+Useful charts:
+
+1. Applications over time
+2. Collections over time
+3. Applications by status
+4. Payments by method
+5. Service-wise application count
+6. Service-wise collection
+
+Keep charts readable.
+
+Do not create excessive charts.
+
+============================================================
+35. CHART ACCESSIBILITY
+============================================================
+
+Charts must have:
+
+- labels
+- legends where required
+- tooltips
+- accessible surrounding text
+
+Do not rely only on colors.
+
+For example:
+
+Do not represent:
+
+Paid = green
+Unpaid = red
+
+without text labels.
+
+============================================================
+36. REPORT TABLES
+============================================================
+
+Create useful tables.
+
+Examples:
+
+Outstanding Payments
+
+Invoice
+Customer
+Service
+Total
+Paid
+Balance
+Status
+
+Service Report
+
+Service
+Applications
+Completed
+Billed
+Collected
+Outstanding
+
+Staff Report
+
+Staff
+Applications
+Completed
+Payments
+Collected
+
+============================================================
+37. MOBILE RESPONSIVENESS
+============================================================
+
+Reports must work on:
+
+375px
+390px
+768px
+1024px
+1440px
+
+On mobile:
+
+- KPI cards stack
+- tables become horizontally scrollable or card-based
+- filters stack
+- charts resize
+- no page-level horizontal overflow
+
+Do not squeeze desktop tables into mobile width.
+
+============================================================
+38. REPORT FILTER UX
+============================================================
+
+Provide:
+
+Date Range
+
+[Today]
+[7 Days]
+[30 Days]
+[This Month]
+[Last Month]
+[Custom]
+
+Additional filters should appear only where relevant.
+
+Include:
+
+Apply
+Reset
+
+Avoid making the user manually reload the page.
+
+============================================================
+39. LOADING STATES
+============================================================
+
+Implement:
+
+Skeleton/loading states
+
+for:
+
+KPI cards
+Charts
+Tables
+
+Do not show empty charts while data is still loading.
+
+============================================================
+40. EMPTY STATES
+============================================================
+
+If there is no data:
+
+show:
+
+"No data available for the selected period."
+
+Do not show:
+
+₹0
+
+everywhere without explaining that the period has no data.
+
+============================================================
+41. ERROR HANDLING
+============================================================
+
+If the report API fails:
+
+show a useful error state.
+
+Example:
+
+"Unable to load reports. Try again."
+
+Do not expose:
+
+database errors
+SQL errors
+stack traces
+
+to users.
+
+============================================================
+42. CURRENCY
+============================================================
+
+Use the existing INR formatting utility.
+
+For example:
+
+₹250.00
+
+Do not introduce a second currency formatter.
+
+Use:
+
+frontend/lib/utils.ts
+
+if the existing formatCurrency utility is already available.
+
+============================================================
+43. EXPORTS
+============================================================
+
+Implement basic report export ONLY if it fits naturally into the
+existing architecture.
+
+Preferred:
+
+CSV export
+
+for tabular reports.
+
+Potential exports:
+
+Customers
+Applications
+Billing
+Payments
+Outstanding
+
+If PDF export would significantly expand scope:
+
+DO NOT implement it in Phase 9.
+
+A later reporting/export phase can handle advanced PDFs.
+
+============================================================
+44. EXPORT SECURITY
+============================================================
+
+Exports must use exactly the same:
+
+tenant isolation
+permissions
+filters
+
+as the corresponding report.
+
+A user must not be able to manipulate:
+
+shop_id
+
+in an export request to obtain another shop's data.
+
+============================================================
+45. AUDIT REPORT EXPORTS
+============================================================
+
+If export is implemented:
+
+audit:
+
+report.exported
+
+Record:
+
+actor
+shop
+report type
+filters/date range
+timestamp
+
+Do not log sensitive customer/document contents unnecessarily.
+
+============================================================
+46. AUDIT ACCESS
+============================================================
+
+If report access itself is considered sensitive by the existing audit
+architecture, follow existing audit conventions.
+
+Do not create excessive audit noise for every KPI request unless
+the project explicitly requires it.
+
+Exports should definitely be audited if implemented.
+
+============================================================
+47. PLATFORM USER REPORTS
+============================================================
+
+Inspect existing platform-role architecture.
+
+Do not accidentally expose cross-shop financial data to ordinary
+shop users.
+
+If platform roles already have platform-level access:
+
+implement only the reporting scope justified by their permissions.
+
+Do not create a giant platform analytics dashboard in this phase
+unless already required by the architecture.
+
+============================================================
+48. SECURITY REVIEW
+============================================================
+
+Test:
+
+- IDOR
+- shop_id manipulation
+- report parameter manipulation
+- export manipulation
+- service_id from another shop
+- staff_id from another shop
+- application_id from another shop
+- unauthorized financial report access
+- unauthorized export
+- SQL injection through filters
+- arbitrary sort/filter injection
+
+Never interpolate raw user input into SQL.
+
+============================================================
+49. TESTS
+============================================================
+
+Create:
+
+backend/tests/test_reports.py
+
+Minimum tests:
+
+1. Summary report
+2. Revenue report
+3. Collection report
+4. Application status report
+5. Application trend
+6. Payment-method report
+7. Service report
+8. Customer report
+9. Outstanding report
+10. Staff report
+11. Date filtering
+12. Custom date range
+13. Empty date range
+14. Pagination
+15. Tenant isolation
+16. Cross-shop service filter rejection
+17. Cross-shop staff filter rejection
+18. RBAC
+19. Financial calculation accuracy
+20. Void/invalid billing handling
+21. Payment aggregation
+22. No N+1 behavior where practical
+23. Export security if exports implemented
+24. Export audit if exports implemented
+
+============================================================
+50. TEST REALISTIC FINANCIAL DATA
+============================================================
+
+Create test fixtures such as:
+
+Service A:
+₹250
+
+Service B:
+₹500
+
+Billing A:
+₹250
+Paid ₹250
+
+Billing B:
+₹500
+Paid ₹200
+
+Expected:
+
+Billed:
+₹750
+
+Collected:
+₹450
+
+Outstanding:
+₹300
+
+Do not hardcode these values into production logic.
+
+============================================================
+51. REGRESSION TESTING
+============================================================
+
+Run the COMPLETE backend test suite.
+
+Previous verified baseline:
+
+136 tests passing
+
+The number should increase after Phase 9 tests.
+
+DO NOT:
+
+delete old tests
+weaken old assertions
+modify completed modules just to hide failures
+
+If a regression occurs:
+
+investigate the actual cause.
+
+============================================================
+52. FRONTEND BUILD
+============================================================
+
+Run:
+
+npm run build
+
+Must pass.
+
+Verify:
+
+/dashboard/reports
+
+and all existing routes.
+
+Do not break:
+
+Applications
+Customers
+Services
+Documents
+Billing
+Payments
+
+============================================================
+53. DOCKER VERIFICATION
+============================================================
+
+Verify:
+
+PostgreSQL
+Redis
+MinIO
+MinIO-init
+Backend
+Frontend
+
+remain healthy.
+
+Do not delete existing volumes.
+
+Do not reset production-like development data.
+
+============================================================
+54. DATABASE MIGRATIONS
+============================================================
+
+Reports should ideally require NO new database tables.
+
+If indexes are needed for performance:
+
+create a proper Alembic migration.
+
+Current migration head:
+
+0008
+
+If a migration is necessary:
+
+create:
+
+0009_...
+
+Do not modify old migrations unnecessarily.
+
+Test:
+
+upgrade
+downgrade
+upgrade again
+
+============================================================
+55. PERFORMANCE VERIFICATION
+============================================================
+
+Inspect generated SQL for important report queries.
+
+Check:
+
+- unnecessary full table scans
+- N+1 queries
+- excessive joins
+- unbounded queries
+- missing indexes
+
+Do not prematurely optimize every query.
+
+Optimize queries that are clearly report-heavy.
+
+============================================================
+56. DOCUMENTATION
+============================================================
+
+Update:
+
+PROJECT_STATUS.md
+CURRENT_PHASE.md
+PHASE_HISTORY.md
+
+CURRENT_PHASE.md should initially say:
+
+Phase 9 — Reports & Financial Analytics
+
+Status:
+
+IN PROGRESS
+
+Checklist:
+
+[ ] Report module
+[ ] Summary API
+[ ] Revenue report
+[ ] Collection report
+[ ] Payment method report
+[ ] Application report
+[ ] Application trends
+[ ] Service report
+[ ] Customer report
+[ ] Staff report
+[ ] Outstanding report
+[ ] Date filtering
+[ ] Tenant isolation
+[ ] RBAC
+[ ] Frontend reports page
+[ ] Charts
+[ ] Tables
+[ ] Responsive design
+[ ] CSV export if implemented
+[ ] Export audit if implemented
+[ ] Backend tests
+[ ] Full regression suite
+[ ] Frontend build
+[ ] Docker verification
+[ ] Documentation
+
+============================================================
+57. DO NOT MODIFY COMPLETED BUSINESS LOGIC
+============================================================
+
+Reports should consume existing:
+
+Customer
+Application
+Service
+Document
+Billing
+Payment
+Staff
+
+data.
+
+Do not rewrite these modules.
+
+If a bug is discovered:
+
+fix the smallest possible root cause.
+
+Document the fix.
+
+============================================================
+58. NO FAKE ANALYTICS
+============================================================
+
+Absolutely do not create:
+
+hardcoded revenue
+hardcoded customer count
+hardcoded application count
+fake charts
+placeholder percentages presented as real data
+
+During empty database conditions, show an appropriate empty state.
+
+============================================================
+59. NO PREDICTIONS
+============================================================
+
+Do not implement:
+
+predicted revenue
+predicted customer growth
+AI recommendations
+"expected revenue"
+"best performing staff"
+"likely to complete"
+future forecasts
+
+Phase 9 is descriptive analytics based on actual historical/current
+data only.
+
+============================================================
+60. NO RANKING OF STAFF
+============================================================
+
+Reports may show factual metrics by staff.
+
+Do NOT create:
+
+Best Staff
+Top Staff
+Worst Staff
+Staff Score
+Performance Rating
+
+unless explicitly requested in a later phase.
+
+============================================================
+61. FINANCIAL DEFINITIONS
+============================================================
+
+Document exact meanings:
+
+TOTAL BILLED
+=
+sum of valid billing totals for selected period
+
+TOTAL COLLECTED
+=
+sum of valid recorded payments for selected period
+
+OUTSTANDING
+=
+current unpaid/partially-paid balance
+
+APPLICATION COUNT
+=
+count of applications matching selected filters/date semantics
+
+CUSTOMER COUNT
+=
+count of customers according to the defined customer date/status
+semantics
+
+Do not use ambiguous labels.
+
+============================================================
+62. IMPORTANT DATE SEMANTICS
+============================================================
+
+For financial reports:
+
+"Billed in period"
+
+should be based on billing creation/issue timestamp according to the
+existing Billing model.
+
+"Collected in period"
+
+should be based on Payment creation timestamp.
+
+Example:
+
+Invoice created:
+August 31
+
+Payment received:
+September 1
+
+August billed:
+includes invoice
+
+September collected:
+includes payment
+
+Do NOT incorrectly assign payment to August simply because the
+invoice was created in August.
+
+============================================================
+63. REPORT CONSISTENCY
+============================================================
+
+The following must agree:
+
+Dashboard summary
+
+Revenue report
+
+Collection report
+
+Outstanding report
+
+For the same filters, totals should reconcile.
+
+Example:
+
+Total Billed = ₹10,000
+Total Collected = ₹7,000
+Outstanding = ₹3,000
+
+The UI should not show contradictory totals.
+
+============================================================
+64. IMPLEMENTATION ORDER
+============================================================
+
+Follow exactly:
+
+1. Inspect continuity documentation
+2. Inspect existing source
+3. Inspect Billing/Payment models
+4. Inspect existing RBAC
+5. Inspect existing tenant system
+6. Design report architecture
+7. Implement backend report service
+8. Implement report schemas
+9. Implement report router
+10. Implement database aggregation queries
+11. Implement permissions
+12. Implement tenant isolation
+13. Add tests
+14. Run report tests
+15. Run complete backend suite
+16. Implement frontend reports page
+17. Add charts
+18. Add tables
+19. Add filters
+20. Add loading/empty/error states
+21. Add CSV export only if appropriate
+22. Run frontend build
+23. Verify Docker
+24. Review git diff
+25. Update documentation
+26. STOP
+
+============================================================
+65. FINAL VERIFICATION
+============================================================
+
+Phase 9 can only be marked COMPLETE when:
+
+[ ] Reports use real database data
+[ ] No fake analytics
+[ ] Summary API works
+[ ] Revenue report works
+[ ] Collection report works
+[ ] Payment method report works
+[ ] Application report works
+[ ] Service report works
+[ ] Customer report works
+[ ] Staff report works where data supports it
+[ ] Outstanding report works
+[ ] Date filtering works
+[ ] Daily/weekly/monthly grouping works where implemented
+[ ] Tenant isolation verified
+[ ] RBAC verified
+[ ] Financial calculations verified
+[ ] Billing/payment date semantics verified
+[ ] No contradictory totals
+[ ] SQL injection protection verified
+[ ] IDOR protection verified
+[ ] Frontend reports page works
+[ ] Charts work
+[ ] Tables work
+[ ] Mobile responsive
+[ ] Loading states
+[ ] Empty states
+[ ] Error states
+[ ] CSV export verified if implemented
+[ ] Export security verified if implemented
+[ ] Audit verified if exports implemented
+[ ] Backend tests pass
+[ ] Full regression suite passes
+[ ] Frontend build passes
+[ ] Docker services healthy
+[ ] Migration verified if created
+[ ] Documentation updated
+[ ] No Phase 10+ modules implemented
+
+============================================================
+66. FINAL REPORT
+============================================================
+
+Return exactly:
+
+# Phase 9 — Reports & Financial Analytics
+
+## Result
+
+PASS
+or
+PASS WITH FIXES
+or
+FAIL
+
+## Reports Implemented
+
+- Summary:
+- Revenue:
+- Collections:
+- Payment methods:
+- Applications:
+- Services:
+- Customers:
+- Staff:
+- Outstanding:
+- Trends:
+
+## Financial Definitions
+
+- Total billed:
+- Total collected:
+- Outstanding:
+- Date semantics:
+
+## API
+
+- Endpoints:
+- Filters:
+- Pagination:
+- Aggregations:
+
+## Security
+
+- Tenant isolation:
+- RBAC:
+- IDOR:
+- SQL injection:
+- Export security:
+
+## Frontend
+
+- Reports page:
+- KPI cards:
+- Charts:
+- Tables:
+- Filters:
+- Responsive:
+- Loading:
+- Empty states:
+- Error states:
+
+## Exports
+
+- CSV:
+- Permissions:
+- Audit:
+
+## Tests
+
+- New report tests:
+- Previous tests:
+- Total:
+- Passed:
+- Failed:
+- Skipped:
+
+## Performance
+
+- Aggregation:
+- N+1:
+- Indexes:
+- Query review:
+
+## Docker
+
+- PostgreSQL:
+- Redis:
+- MinIO:
+- Backend:
+- Frontend:
+
+## Documentation
+
+- PROJECT_STATUS.md:
+- CURRENT_PHASE.md:
+- PHASE_HISTORY.md:
+
+## Issues Fixed
+
+Only genuine issues.
+
+## Remaining Issues
+
+Only genuine issues.
+
+## Scope Confirmation
+
+State exactly:
+
+"Phase 9 Reports & Financial Analytics completed. No Notifications, WhatsApp, Chat, Subscriptions, Coupons, Offers, Payment Gateways, AI Predictions, or other Phase 10+ modules were implemented."
+
+============================================================
+FINAL RULE
+============================================================
+
+INSPECT
+→ IMPLEMENT
+→ TEST
+→ VERIFY FINANCIAL CALCULATIONS
+→ VERIFY TENANT ISOLATION
+→ VERIFY RBAC
+→ BUILD
+→ DOCKER VERIFY
+→ REVIEW GIT DIFF
+→ UPDATE DOCUMENTATION
+→ REPORT
+→ STOP
+
+DO NOT START PHASE 10.
+============================================================

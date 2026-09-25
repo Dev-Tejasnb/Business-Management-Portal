@@ -1,0 +1,340 @@
+'use client';
+
+import { useAuth } from '@/lib/auth-context';
+import { ProtectedRoute } from '@/components/protected-route';
+import Link from 'next/link';
+import {
+  Search,
+  Filter,
+  Trash2,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Plus,
+  Users,
+  Banknote
+} from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  Button,
+  Input,
+  Select,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableCell,
+  Badge,
+  Pagination,
+  Toast,
+  ToastDescription,
+  ToastTitle,
+  Toaster
+} from '@/components/ui';
+import { ApplicationStatus } from '@/src/types/application';
+
+// Types
+interface Application {
+  id: number;
+  application_number: string;
+  customer: {
+    name: string;
+    mobile: string;
+  };
+  service: {
+    name: string;
+  };
+  status: ApplicationStatus;
+  assigned_staff?: {
+    full_name: string;
+  } | null;
+  created_at: string;
+}
+
+// Mock data for now - will be replaced with API calls
+const MOCK_APPLICATIONS: Application[] = [
+  {
+    id: 1,
+    application_number: 'TEST-2026-000001',
+    customer: {
+      name: 'John Doe',
+      mobile: '+919876543210'
+    },
+    service: {
+      name: 'Business Registration'
+    },
+    status: 'SUBMITTED',
+    assigned_staff: {
+      full_name: 'Jane Smith'
+    },
+    created_at: '2026-09-20T10:30:00Z'
+  },
+  {
+    id: 2,
+    application_number: 'TEST-2026-000002',
+    customer: {
+      name: 'Jane Smith',
+      mobile: '+919876543211'
+    },
+    service: {
+      name: 'Tax Consulting'
+    },
+    status: 'IN_REVIEW',
+    assigned_staff: null,
+    created_at: '2026-09-21T14:15:00Z'
+  },
+  {
+    id: 3,
+    application_number: 'TEST-2026-000003',
+    customer: {
+      name: 'Bob Wilson',
+      mobile: '+919876543212'
+    },
+    service: {
+      name: 'Legal Documentation'
+    },
+    status: 'APPROVED',
+    assigned_staff: {
+      full_name: 'Mike Johnson'
+    },
+    created_at: '2026-09-22T09:00:00Z'
+  }
+];
+
+function StatusBadge({ status }: { status: ApplicationStatus }) {
+  const statusConfigs: Record<ApplicationStatus, { variant: string; label: string }> = {
+    ENQUIRY: { variant: 'secondary', label: 'Enquiry' },
+    DRAFT: { variant: 'muted', label: 'Draft' },
+    SUBMITTED: { variant: 'default', label: 'Submitted' },
+    IN_REVIEW: { variant: 'warning', label: 'In Review' },
+    ACTION_REQUIRED: { variant: 'destructive', label: 'Action Required' },
+    APPROVED: { variant: 'success', label: 'Approved' },
+    REJECTED: { variant: 'destructive', label: 'Rejected' },
+    COMPLETED: { variant: 'success', label: 'Completed' },
+    CANCELLED: { variant: 'destructive', label: 'Cancelled' }
+  };
+
+  const config = statusConfigs[status] || { variant: 'secondary', label: status };
+  return <Badge variant={config.variant}>{config.label}</Badge>;
+}
+
+export default function ApplicationsPage() {
+  const { user } = useAuth();
+  const [applications, setApplications] = useState<Application[]>(MOCK_APPLICATIONS);
+  const [filteredApplications, setFilteredApplications] = useState<Application[]>([]);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<ApplicationStatus | ''>('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(10);
+  const [loading, setLoading] = useState(false);
+
+  // Filter applications based on search and status
+  useEffect(() => {
+    let filtered = [...applications];
+
+    if (search) {
+      const searchLower = search.toLowerCase();
+      filtered = filtered.filter(app =>
+        app.application_number.toLowerCase().includes(searchLower) ||
+        app.customer.name.toLowerCase().includes(searchLower) ||
+        app.service.name.toLowerCase().includes(searchLower) ||
+        (app.assigned_staff?.full_name?.toLowerCase().includes(searchLower))
+      );
+    }
+
+    if (statusFilter) {
+      filtered = filtered.filter(app => app.status === statusFilter);
+    }
+
+    setFilteredApplications(filtered);
+    setCurrentPage(1); // Reset to first page when filters change
+  }, [applications, search, statusFilter]);
+
+  // Pagination logic
+  const totalPages = Math.max(1, Math.ceil(filteredApplications.length / pageSize));
+  const paginatedApplications = filteredApplications.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearch(e.target.value);
+  };
+
+  const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setStatusFilter(e.target.value as ApplicationStatus | '');
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  // Mock delete function
+  const handleDelete = async (id: number) => {
+    setLoading(true);
+    // TODO: Replace with actual API call
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    setApplications(prev => prev.filter(app => app.id !== id));
+    setLoading(false);
+  };
+
+  return (
+    <ProtectedRoute>
+      <div className="space-y-6">
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h1 className="text-2xl font-bold">Applications</h1>
+            <p className="text-muted-foreground">
+              Manage customer applications for services
+            </p>
+          </div>
+          <Link href="/dashboard/applications/new" className="flex items-center gap-2">
+            <Button variant="default" size="icon">
+              <Plus className="h-4 w-4" />
+            </Button>
+            <span>New Application</span>
+          </Link>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="flex items-center gap-2">
+            <Search className="h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search applications..."
+              value={search}
+              onChange={handleSearchChange}
+              className="max-w-xs"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <Select
+              value={statusFilter || ''}
+              onChange={handleStatusChange}
+              className="min-w-[180px]"
+            >
+              <option value="">All Statuses</option>
+              <option value="ENQUIRY">Enquiry</option>
+              <option value="DRAFT">Draft</option>
+              <option value="SUBMITTED">Submitted</option>
+              <option value="IN_REVIEW">In Review</option>
+              <option value="ACTION_REQUIRED">Action Required</option>
+              <option value="APPROVED">Approved</option>
+              <option value="REJECTED">Rejected</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="CANCELLED">Cancelled</option>
+            </Select>
+          </div>
+          <div className="text-right md:text-left col-span-2">
+            <p className="text-sm text-muted-foreground">
+              Showing {filteredApplications.length} of {applications.length} applications
+            </p>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableCell className="w-20">Application #</TableCell>
+                <TableCell>Customer</TableCell>
+                <TableCell>Service</TableCell>
+                <TableCell className="w-24">Status</TableCell>
+                <TableCell className="w-24">Assigned Staff</TableCell>
+                <TableCell className="w-20">Created</TableCell>
+                <TableCell className="w-16">Actions</TableCell>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedApplications.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan="7" className="text-center py-8">
+                    <p className="text-muted-foreground">No applications found</p>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                paginatedApplications.map((app) => (
+                  <TableRow key={app.id} className="hover:bg-accent">
+                    <TableCell className="font-mono">{app.application_number}</TableCell>
+                    <TableCell>
+                      <div className="flex w-full items-center gap-3">
+                        <div className="flex-shrink-0 h-8 w-8 rounded bg-muted/50 flex items-center justify-center">
+                          <Users className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div>
+                          <p className="font-medium">{app.customer.name}</p>
+                          <p className="text-xs text-muted-foreground">{app.customer.mobile}</p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-shrink-0 h-8 w-8 rounded bg-muted/50 flex items-center justify-center">
+                          <Banknote className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div>
+                          <p className="font-medium">{app.service.name}</p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={app.status} />
+                    </TableCell>
+                    <TableCell>
+                      {app.assigned_staff ? (
+                        <div className="flex items-center gap-2">
+                          <div className="flex-shrink-0 h-6 w-6 rounded bg-muted/50 flex items-center justify-center">
+                            <Users className="h-3 w-3 text-muted-foreground" />
+                          </div>
+                          <span className="text-sm">{app.assigned_staff.full_name}</span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground italic">Unassigned</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {new Date(app.created_at).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="flex flex-col gap-2">
+                      <Link href={`/dashboard/applications/${app.id}`} className="text-sm text-primary hover:underline">
+                        View
+                      </Link>
+                      <Link href={`/dashboard/applications/${app.id}/edit`} className="text-sm text-primary hover:underline">
+                        Edit
+                      </Link>
+                      <button
+                        onClick={() => handleDelete(app.id)}
+                        disabled={loading}
+                        className={`text-sm text-destructive hover:underline ${loading ? 'cursor-not-allowed opacity-50' : ''}`}
+                      >
+                        Delete
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+
+        <div className="flex justify-center">
+          <Pagination
+            totalPages={totalPages}
+            currentPage={currentPage}
+            onPageChange={(page) => setCurrentPage(page)}
+          />
+        </div>
+      </div>
+
+      <Toaster />
+    </ProtectedRoute>
+  );
+}

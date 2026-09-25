@@ -1,0 +1,300 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.15, pytest-8.4.2, pluggy-1.6.0 -- /usr/local/bin/python
+cachedir: .pytest_cache
+rootdir: /app
+configfile: pyproject.toml
+plugins: asyncio-0.26.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, asyncio_default_fixture_loop_scope=session, asyncio_default_test_loop_scope=session
+collecting ... collected 28 items
+
+tests/test_reports.py::TestReportsService::test_get_summary_report PASSED [  3%]
+tests/test_reports.py::TestReportsService::test_get_summary_report_with_unpaid_billing PASSED [  7%]
+tests/test_reports.py::TestReportsService::test_get_revenue_report PASSED [ 10%]
+tests/test_reports.py::TestReportsService::test_get_revenue_report_with_discount PASSED [ 14%]
+tests/test_reports.py::TestReportsService::test_get_collection_report PASSED [ 17%]
+tests/test_reports.py::TestReportsService::test_get_collection_report_multiple_methods PASSED [ 21%]
+tests/test_reports.py::TestReportsService::test_get_payment_method_analytics FAILED [ 25%]
+tests/test_reports.py::TestReportsService::test_get_application_report PASSED [ 28%]
+tests/test_reports.py::TestReportsService::test_get_application_report_group_by_month FAILED [ 32%]
+tests/test_reports.py::TestReportsService::test_get_service_report PASSED [ 35%]
+tests/test_reports.py::TestReportsService::test_get_service_report_multiple_services FAILED [ 39%]
+tests/test_reports.py::TestReportsService::test_get_customer_report PASSED [ 42%]
+tests/test_reports.py::TestReportsService::test_get_customer_report_with_unpaid PASSED [ 46%]
+tests/test_reports.py::TestReportsService::test_get_staff_report FAILED  [ 50%]
+tests/test_reports.py::TestReportsService::test_get_outstanding_report PASSED [ 53%]
+tests/test_reports.py::TestReportsService::test_get_outstanding_report_pagination PASSED [ 57%]
+tests/test_reports.py::TestReportsService::test_get_outstanding_report_search PASSED [ 60%]
+tests/test_reports.py::TestReportsService::test_get_outstanding_report_payment_status_filter PASSED [ 64%]
+tests/test_reports.py::TestReportsService::test_get_billing_report PASSED [ 67%]
+tests/test_reports.py::TestReportsService::test_get_discount_report PASSED [ 71%]
+tests/test_reports.py::TestReportsService::test_get_financial_trend PASSED [ 75%]
+tests/test_reports.py::TestReportsService::test_get_document_analytics PASSED [ 78%]
+tests/test_reports.py::TestReportsService::test_get_document_analytics_with_rejected FAILED [ 82%]
+tests/test_reports.py::TestReportsService::test_cross_shop_isolation PASSED [ 85%]
+tests/test_reports.py::TestReportsService::test_date_range_presets PASSED [ 89%]
+tests/test_reports.py::TestReportsService::test_custom_date_range PASSED [ 92%]
+tests/test_reports.py::TestReportsService::test_custom_date_range_validation PASSED [ 96%]
+tests/test_reports.py::TestReportsService::test_voided_billing_excluded_from_reports FAILED [100%]
+
+=================================== FAILURES ===================================
+_____________ TestReportsService.test_get_payment_method_analytics _____________
+
+self = <tests.test_reports.TestReportsService object at 0x793adc63f680>
+db_session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x793adc53c5f0>
+sample_shop = <app.models.shop.Shop object at 0x793adc53b570>
+sample_billing = <app.models.billing.Billing object at 0x793adc171f50>
+sample_payment = <app.models.billing.Payment object at 0x793adc53bdf0>
+sample_user_financial = <app.models.user.User object at 0x793adc17c750>
+sample_user_owner = <app.models.user.User object at 0x793adc1ae120>
+
+    @pytest.mark.asyncio
+    async def test_get_payment_method_analytics(
+        self, db_session: AsyncSession, sample_shop: Shop, sample_billing: Billing, sample_payment: Payment, sample_user_financial: User, sample_user_owner: User
+    ):
+        """Test payment method analytics."""
+        service = ReportsService(db_session)
+    
+        result = await service.get_payment_method_analytics(
+            shop_id=sample_shop.id,
+            preset="this_month",
+        )
+    
+        assert result["period_from"] is not None
+        assert result["period_to"] is not None
+>       assert len(result["methods"]) == 1
+                   ^^^^^^^^^^^^^^^^^
+E       KeyError: 'methods'
+
+tests/test_reports.py:524: KeyError
+---------------------------- Captured stdout setup -----------------------------
+2026-09-25 18:19:39,851 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-09-25 18:19:39,851 INFO sqlalchemy.engine.Engine TRUNCATE TABLE documents, applications, audit_logs, platform_manager_shops, shop_memberships, shops, users, customers, services, service_fields, service_required_documents, service_categories RESTART IDENTITY CASCADE
+2026-09-25 18:19:39,851 INFO sqlalchemy.engine.Engine [cached since 3.044s ago] ()
+2026-09-25 18:19:40,016 INFO sqlalchemy.engine.Engine COMMIT
+2026-09-25 18:19:40,023 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-09-25 18:19:40,023 INFO sqlalchemy.engine.Engine INSERT INTO shops (code, name, slug, status) VALUES ($1::VARCHAR, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR) RETURNING shops.id, shops.created_at, shops.updated_at
+2026-09-25 18:19:40,023 INFO sqlalchemy.engine.Engine [cached since 3.002s ago] ('TEST', 'Test Shop', 'test-shop', 'active')
+2026-09-25 18:19:40,025 INFO sqlalchemy.engine.Engine INSERT INTO customers (shop_id, name, mobile, email, address, notes, status, primary_staff_id) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::VARCHAR, $7::VARCHAR, $8::INTEGER) RETURNING customers.id, customers.created_at, customers.updated_at
+2026-09-25 18:19:40,025 INFO sqlalchemy.engine.Engine [cached since 3s ago] (1, 'John Doe', '+919876543210', 'john@example.com', None, None, 'active', None)
+2026-09-25 18:19:40,028 INFO sqlalchemy.engine.Engine INSERT INTO services (shop_id, category_id, name, slug, description, base_price, estimated_processing_days, status) VALUES ($1::INTEGER, $2::INTEGER, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::NUMERIC(12, 2), $7::INTEGER, $8::VARCHAR) RETURNING services.id, services.created_at, services.updated_at
+2026-09-25 18:19:40,028 INFO sqlalchemy.engine.Engine [cached since 2.998s ago] (1, None, 'PAN Card Service', 'pan-card', 'PAN Card Application', 100.0, 5, 'active')
+2026-09-25 18:19:40,030 INFO sqlalchemy.engine.Engine INSERT INTO applications (shop_id, customer_id, service_id, application_number, status, assigned_staff_id, notes) VALUES ($1::INTEGER, $2::INTEGER, $3::INTEGER, $4::VARCHAR, $5::VARCHAR, $6::INTEGER, $7::VARCHAR) RETURNING applications.id, applications.created_at, applications.updated_at
+2026-09-25 18:19:40,030 INFO sqlalchemy.engine.Engine [cached since 2.996s ago] (1, 1, 1, 'APP-TEST-2024-0001', 'completed', None, None)
+2026-09-25 18:19:40,094 INFO sqlalchemy.engine.Engine INSERT INTO users (email, full_name, hashed_password, platform_role, is_active) VALUES ($1::VARCHAR, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::BOOLEAN) RETURNING users.id, users.created_at, users.updated_at
+2026-09-25 18:19:40,094 INFO sqlalchemy.engine.Engine [cached since 2.992s ago] ('owner@test.com', 'Test Owner', '$argon2id$v=19$m=65536,t=3,p=4$E/BEZ9YPDh+Za0+MiQrEgg$mC6TMZsglCMlyAJ2t4I/3qmFbz8v1SmUiSaSnqHi1Xo', None, True)
+2026-09-25 18:19:40,096 INFO sqlalchemy.engine.Engine INSERT INTO shop_memberships (user_id, shop_id, role, is_active) VALUES ($1::INTEGER, $2::INTEGER, $3::VARCHAR, $4::BOOLEAN) RETURNING shop_memberships.id, shop_memberships.created_at, shop_memberships.updated_at
+2026-09-25 18:19:40,096 INFO sqlalchemy.engine.Engine [cached since 2.991s ago] (1, 1, <ShopRole.OWNER: 'shop_owner'>, True)
+2026-09-25 18:19:40,098 INFO sqlalchemy.engine.Engine INSERT INTO billings (shop_id, application_id, customer_id, invoice_number, service_amount, non_service_charges, subtotal, discount_type, discount_value, discount_amount, discount_reason, total_amount, amount_paid, balance_amount, payment_status, billing_status, notes, created_by, updated_by) VALUES ($1::INTEGER, $2::INTEGER, $3::INTEGER, $4::VARCHAR, $5::NUMERIC(12, 2), $6::NUMERIC(12, 2), $7::NUMERIC(12, 2), $8::VARCHAR, $9::NUMERIC(12, 2), $10::NUMERIC(12, 2), $11::VARCHAR, $12::NUMERIC(12, 2), $13::NUMERIC(12, 2), $14::NUMERIC(12, 2), $15::VARCHAR, $16::VARCHAR, $17::VARCHAR, $18::INTEGER, $19::INTEGER) RETURNING billings.id, billings.created_at, billings.updated_at
+2026-09-25 18:19:40,098 INFO sqlalchemy.engine.Engine [cached since 2.99s ago] (1, 1, 1, 'INV-TEST-2024-0001', Decimal('100.00'), Decimal('0.00'), Decimal('100.00'), 'fixed', Decimal('0.00'), Decimal('0.00'), None, Decimal('100.00'), Decimal('100.00'), Decimal('0.00'), 'paid', 'issued', None, 1, None)
+2026-09-25 18:19:40,162 INFO sqlalchemy.engine.Engine INSERT INTO users (email, full_name, hashed_password, platform_role, is_active) VALUES ($1::VARCHAR, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::BOOLEAN) RETURNING users.id, users.created_at, users.updated_at
+2026-09-25 18:19:40,162 INFO sqlalchemy.engine.Engine [cached since 3.06s ago] ('financial@test.com', 'Test Financial Staff', '$argon2id$v=19$m=65536,t=3,p=4$t24BwO7wwQ11S8/5E4EV5A$214LJvl2GBz7ubedq/nXu5+RgS/Kt1kV9Xew8WOa2Mo', None, True)
+2026-09-25 18:19:40,163 INFO sqlalchemy.engine.Engine INSERT INTO shop_memberships (user_id, shop_id, role, is_active) VALUES ($1::INTEGER, $2::INTEGER, $3::VARCHAR, $4::BOOLEAN) RETURNING shop_memberships.id, shop_memberships.created_at, shop_memberships.updated_at
+2026-09-25 18:19:40,163 INFO sqlalchemy.engine.Engine [cached since 3.058s ago] (2, 1, <ShopRole.FINANCIAL_STAFF: 'financial_staff'>, True)
+2026-09-25 18:19:40,165 INFO sqlalchemy.engine.Engine INSERT INTO payments (shop_id, billing_id, amount, payment_method, reference_number, reference_exception, reference_exception_reason, notes, recorded_by, paid_at) VALUES ($1::INTEGER, $2::INTEGER, $3::NUMERIC(12, 2), $4::VARCHAR, $5::VARCHAR, $6::BOOLEAN, $7::VARCHAR, $8::VARCHAR, $9::INTEGER, $10::TIMESTAMP WITH TIME ZONE) RETURNING payments.id, payments.created_at, payments.updated_at
+2026-09-25 18:19:40,165 INFO sqlalchemy.engine.Engine [cached since 2.984s ago] (1, 1, Decimal('100.00'), 'cash', 'REF001', False, None, None, 2, datetime.date(2026, 9, 25))
+------------------------------ Captured log setup ------------------------------
+INFO     sqlalchemy.engine.Engine:base.py:2712 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1848 TRUNCATE TABLE documents, applications, audit_logs, platform_manager_shops, shop_memberships, shops, users, customers, services, service_fields, service_required_documents, service_categories RESTART IDENTITY CASCADE
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 3.044s ago] ()
+INFO     sqlalchemy.engine.Engine:base.py:2718 COMMIT
+INFO     sqlalchemy.engine.Engine:base.py:2712 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1848 INSERT INTO shops (code, name, slug, status) VALUES ($1::VARCHAR, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR) RETURNING shops.id, shops.created_at, shops.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 3.002s ago] ('TEST', 'Test Shop', 'test-shop', 'active')
+INFO     sqlalchemy.engine.Engine:base.py:1848 INSERT INTO customers (shop_id, name, mobile, email, address, notes, status, primary_staff_id) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::VARCHAR, $7::VARCHAR, $8::INTEGER) RETURNING customers.id, customers.created_at, customers.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 3s ago] (1, 'John Doe', '+919876543210', 'john@example.com', None, None, 'active', None)
+INFO     sqlalchemy.engine.Engine:base.py:1848 INSERT INTO services (shop_id, category_id, name, slug, description, base_price, estimated_processing_days, status) VALUES ($1::INTEGER, $2::INTEGER, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::NUMERIC(12, 2), $7::INTEGER, $8::VARCHAR) RETURNING services.id, services.created_at, services.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 2.998s ago] (1, None, 'PAN Card Service', 'pan-card', 'PAN Card Application', 100.0, 5, 'active')
+INFO     sqlalchemy.engine.Engine:base.py:1848 INSERT INTO applications (shop_id, customer_id, service_id, application_number, status, assigned_staff_id, notes) VALUES ($1::INTEGER, $2::INTEGER, $3::INTEGER, $4::VARCHAR, $5::VARCHAR, $6::INTEGER, $7::VARCHAR) RETURNING applications.id, applications.created_at, applications.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 2.996s ago] (1, 1, 1, 'APP-TEST-2024-0001', 'completed', None, None)
+INFO     sqlalchemy.engine.Engine:base.py:1848 INSERT INTO users (email, full_name, hashed_password, platform_role, is_active) VALUES ($1::VARCHAR, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::BOOLEAN) RETURNING users.id, users.created_at, users.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 2.992s ago] ('owner@test.com', 'Test Owner', '$argon2id$v=19$m=65536,t=3,p=4$E/BEZ9YPDh+Za0+MiQrEgg$mC6TMZsglCMlyAJ2t4I/3qmFbz8v1SmUiSaSnqHi1Xo', None, True)
+INFO     sqlalchemy.engine.Engine:base.py:1848 INSERT INTO shop_memberships (user_id, shop_id, role, is_active) VALUES ($1::INTEGER, $2::INTEGER, $3::VARCHAR, $4::BOOLEAN) RETURNING shop_memberships.id, shop_memberships.created_at, shop_memberships.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 2.991s ago] (1, 1, <ShopRole.OWNER: 'shop_owner'>, True)
+INFO     sqlalchemy.engine.Engine:base.py:1848 INSERT INTO billings (shop_id, application_id, customer_id, invoice_number, service_amount, non_service_charges, subtotal, discount_type, discount_value, discount_amount, discount_reason, total_amount, amount_paid, balance_amount, payment_status, billing_status, notes, created_by, updated_by) VALUES ($1::INTEGER, $2::INTEGER, $3::INTEGER, $4::VARCHAR, $5::NUMERIC(12, 2), $6::NUMERIC(12, 2), $7::NUMERIC(12, 2), $8::VARCHAR, $9::NUMERIC(12, 2), $10::NUMERIC(12, 2), $11::VARCHAR, $12::NUMERIC(12, 2), $13::NUMERIC(12, 2), $14::NUMERIC(12, 2), $15::VARCHAR, $16::VARCHAR, $17::VARCHAR, $18::INTEGER, $19::INTEGER) RETURNING billings.id, billings.created_at, billings.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 2.99s ago] (1, 1, 1, 'INV-TEST-2024-0001', Decimal('100.00'), Decimal('0.00'), Decimal('100.00'), 'fixed', Decimal('0.00'), Decimal('0.00'), None, Decimal('100.00'), Decimal('100.00'), Decimal('0.00'), 'paid', 'issued', None, 1, None)
+INFO     sqlalchemy.engine.Engine:base.py:1848 INSERT INTO users (email, full_name, hashed_password, platform_role, is_active) VALUES ($1::VARCHAR, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::BOOLEAN) RETURNING users.id, users.created_at, users.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 3.06s ago] ('financial@test.com', 'Test Financial Staff', '$argon2id$v=19$m=65536,t=3,p=4$t24BwO7wwQ11S8/5E4EV5A$214LJvl2GBz7ubedq/nXu5+RgS/Kt1kV9Xew8WOa2Mo', None, True)
+INFO     sqlalchemy.engine.Engine:base.py:1848 INSERT INTO shop_memberships (user_id, shop_id, role, is_active) VALUES ($1::INTEGER, $2::INTEGER, $3::VARCHAR, $4::BOOLEAN) RETURNING shop_memberships.id, shop_memberships.created_at, shop_memberships.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 3.058s ago] (2, 1, <ShopRole.FINANCIAL_STAFF: 'financial_staff'>, True)
+INFO     sqlalchemy.engine.Engine:base.py:1848 INSERT INTO payments (shop_id, billing_id, amount, payment_method, reference_number, reference_exception, reference_exception_reason, notes, recorded_by, paid_at) VALUES ($1::INTEGER, $2::INTEGER, $3::NUMERIC(12, 2), $4::VARCHAR, $5::VARCHAR, $6::BOOLEAN, $7::VARCHAR, $8::VARCHAR, $9::INTEGER, $10::TIMESTAMP WITH TIME ZONE) RETURNING payments.id, payments.created_at, payments.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 2.984s ago] (1, 1, Decimal('100.00'), 'cash', 'REF001', False, None, None, 2, datetime.date(2026, 9, 25))
+----------------------------- Captured stdout call -----------------------------
+2026-09-25 18:19:40,168 INFO sqlalchemy.engine.Engine SELECT coalesce(sum(payments.amount), $1::NUMERIC) AS coalesce_1 
+FROM payments 
+WHERE payments.shop_id = $2::INTEGER AND (EXISTS (SELECT 1 
+FROM billings 
+WHERE billings.id = payments.billing_id AND billings.billing_status != $3::VARCHAR)) AND date(payments.paid_at) >= $4::DATE AND date(payments.paid_at) <= $5::DATE
+2026-09-25 18:19:40,168 INFO sqlalchemy.engine.Engine [cached since 1.924s ago] (Decimal('0.00'), 1, 'void', datetime.date(2026, 9, 1), datetime.date(2026, 9, 25))
+2026-09-25 18:19:40,169 INFO sqlalchemy.engine.Engine SELECT count(payments.id) AS count_1 
+FROM payments 
+WHERE payments.shop_id = $1::INTEGER AND (EXISTS (SELECT 1 
+FROM billings 
+WHERE billings.id = payments.billing_id AND billings.billing_status != $2::VARCHAR)) AND date(payments.paid_at) >= $3::DATE AND date(payments.paid_at) <= $4::DATE
+2026-09-25 18:19:40,169 INFO sqlalchemy.engine.Engine [cached since 0.99s ago] (1, 'void', datetime.date(2026, 9, 1), datetime.date(2026, 9, 25))
+2026-09-25 18:19:40,171 INFO sqlalchemy.engine.Engine SELECT payments.payment_method, count(payments.id) AS count, coalesce(sum(payments.amount), $1::NUMERIC) AS total_amount 
+FROM payments 
+WHERE payments.shop_id = $2::INTEGER AND (EXISTS (SELECT 1 
+FROM billings 
+WHERE billings.id = payments.billing_id AND billings.billing_status != $3::VARCHAR)) AND date(payments.paid_at) >= $4::DATE AND date(payments.paid_at) <= $5::DATE GROUP BY payments.payment_method
+2026-09-25 18:19:40,171 INFO sqlalchemy.engine.Engine [cached since 0.989s ago] (Decimal('0.00'), 1, 'void', datetime.date(2026, 9, 1), datetime.date(2026, 9, 25))
+------------------------------ Captured log call -------------------------------
+INFO     sqlalchemy.engine.Engine:base.py:1848 SELECT coalesce(sum(payments.amount), $1::NUMERIC) AS coalesce_1 
+FROM payments 
+WHERE payments.shop_id = $2::INTEGER AND (EXISTS (SELECT 1 
+FROM billings 
+WHERE billings.id = payments.billing_id AND billings.billing_status != $3::VARCHAR)) AND date(payments.paid_at) >= $4::DATE AND date(payments.paid_at) <= $5::DATE
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 1.924s ago] (Decimal('0.00'), 1, 'void', datetime.date(2026, 9, 1), datetime.date(2026, 9, 25))
+INFO     sqlalchemy.engine.Engine:base.py:1848 SELECT count(payments.id) AS count_1 
+FROM payments 
+WHERE payments.shop_id = $1::INTEGER AND (EXISTS (SELECT 1 
+FROM billings 
+WHERE billings.id = payments.billing_id AND billings.billing_status != $2::VARCHAR)) AND date(payments.paid_at) >= $3::DATE AND date(payments.paid_at) <= $4::DATE
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 0.99s ago] (1, 'void', datetime.date(2026, 9, 1), datetime.date(2026, 9, 25))
+INFO     sqlalchemy.engine.Engine:base.py:1848 SELECT payments.payment_method, count(payments.id) AS count, coalesce(sum(payments.amount), $1::NUMERIC) AS total_amount 
+FROM payments 
+WHERE payments.shop_id = $2::INTEGER AND (EXISTS (SELECT 1 
+FROM billings 
+WHERE billings.id = payments.billing_id AND billings.billing_status != $3::VARCHAR)) AND date(payments.paid_at) >= $4::DATE AND date(payments.paid_at) <= $5::DATE GROUP BY payments.payment_method
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 0.989s ago] (Decimal('0.00'), 1, 'void', datetime.date(2026, 9, 1), datetime.date(2026, 9, 25))
+--------------------------- Captured stdout teardown ---------------------------
+2026-09-25 18:19:40,801 INFO sqlalchemy.engine.Engine ROLLBACK
+2026-09-25 18:19:40,803 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-09-25 18:19:40,803 INFO sqlalchemy.engine.Engine TRUNCATE TABLE documents, applications, audit_logs, platform_manager_shops, shop_memberships, shops, users, customers, services, service_fields, service_required_documents, service_categories RESTART IDENTITY CASCADE
+2026-09-25 18:19:40,803 INFO sqlalchemy.engine.Engine [cached since 3.996s ago] ()
+2026-09-25 18:19:40,965 INFO sqlalchemy.engine.Engine COMMIT
+---------------------------- Captured log teardown -----------------------------
+INFO     sqlalchemy.engine.Engine:base.py:2715 ROLLBACK
+INFO     sqlalchemy.engine.Engine:base.py:2712 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1848 TRUNCATE TABLE documents, applications, audit_logs, platform_manager_shops, shop_memberships, shops, users, customers, services, service_fields, service_required_documents, service_categories RESTART IDENTITY CASCADE
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 3.996s ago] ()
+INFO     sqlalchemy.engine.Engine:base.py:2718 COMMIT
+________ TestReportsService.test_get_application_report_group_by_month _________
+
+self = <tests.test_reports.TestReportsService object at 0x793adc5d0050>
+db_session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x793adc141fd0>
+sample_shop = <app.models.shop.Shop object at 0x793adc172550>
+sample_application = <app.models.application.Application object at 0x793adc172850>
+
+    @pytest.mark.asyncio
+    async def test_get_application_report_group_by_month(
+        self, db_session: AsyncSession, sample_shop: Shop, sample_application: Application
+    ):
+        """Test application report grouped by month."""
+        service = ReportsService(db_session)
+    
+        result = await service.get_application_report(
+            shop_id=sample_shop.id,
+            preset="this_year",
+            group_by="month",
+        )
+    
+>       assert result["group_by"] == "month"
+               ^^^^^^^^^^^^^^^^^^
+E       KeyError: 'group_by'
+
+tests/test_reports.py:563: KeyError
+---------------------------- Captured stdout setup -----------------------------
+2026-09-25 18:19:41,332 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-09-25 18:19:41,332 INFO sqlalchemy.engine.Engine TRUNCATE TABLE documents, applications, audit_logs, platform_manager_shops, shop_memberships, shops, users, customers, services, service_fields, service_required_documents, service_categories RESTART IDENTITY CASCADE
+2026-09-25 18:19:41,332 INFO sqlalchemy.engine.Engine [cached since 4.525s ago] ()
+2026-09-25 18:19:41,498 INFO sqlalchemy.engine.Engine COMMIT
+2026-09-25 18:19:41,505 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-09-25 18:19:41,506 INFO sqlalchemy.engine.Engine INSERT INTO shops (code, name, slug, status) VALUES ($1::VARCHAR, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR) RETURNING shops.id, shops.created_at, shops.updated_at
+2026-09-25 18:19:41,506 INFO sqlalchemy.engine.Engine [cached since 4.485s ago] ('TEST', 'Test Shop', 'test-shop', 'active')
+2026-09-25 18:19:41,508 INFO sqlalchemy.engine.Engine INSERT INTO customers (shop_id, name, mobile, email, address, notes, status, primary_staff_id) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::VARCHAR, $7::VARCHAR, $8::INTEGER) RETURNING customers.id, customers.created_at, customers.updated_at
+2026-09-25 18:19:41,508 INFO sqlalchemy.engine.Engine [cached since 4.483s ago] (1, 'John Doe', '+919876543210', 'john@example.com', None, None, 'active', None)
+2026-09-25 18:19:41,510 INFO sqlalchemy.engine.Engine INSERT INTO services (shop_id, category_id, name, slug, description, base_price, estimated_processing_days, status) VALUES ($1::INTEGER, $2::INTEGER, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::NUMERIC(12, 2), $7::INTEGER, $8::VARCHAR) RETURNING services.id, services.created_at, services.updated_at
+2026-09-25 18:19:41,510 INFO sqlalchemy.engine.Engine [cached since 4.481s ago] (1, None, 'PAN Card Service', 'pan-card', 'PAN Card Application', 100.0, 5, 'active')
+2026-09-25 18:19:41,512 INFO sqlalchemy.engine.Engine INSERT INTO applications (shop_id, customer_id, service_id, application_number, status, assigned_staff_id, notes) VALUES ($1::INTEGER, $2::INTEGER, $3::INTEGER, $4::VARCHAR, $5::VARCHAR, $6::INTEGER, $7::VARCHAR) RETURNING applications.id, applications.created_at, applications.updated_at
+2026-09-25 18:19:41,512 INFO sqlalchemy.engine.Engine [cached since 4.479s ago] (1, 1, 1, 'APP-TEST-2024-0001', 'completed', None, None)
+------------------------------ Captured log setup ------------------------------
+INFO     sqlalchemy.engine.Engine:base.py:2712 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1848 TRUNCATE TABLE documents, applications, audit_logs, platform_manager_shops, shop_memberships, shops, users, customers, services, service_fields, service_required_documents, service_categories RESTART IDENTITY CASCADE
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 4.525s ago] ()
+INFO     sqlalchemy.engine.Engine:base.py:2718 COMMIT
+INFO     sqlalchemy.engine.Engine:base.py:2712 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1848 INSERT INTO shops (code, name, slug, status) VALUES ($1::VARCHAR, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR) RETURNING shops.id, shops.created_at, shops.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 4.485s ago] ('TEST', 'Test Shop', 'test-shop', 'active')
+INFO     sqlalchemy.engine.Engine:base.py:1848 INSERT INTO customers (shop_id, name, mobile, email, address, notes, status, primary_staff_id) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::VARCHAR, $7::VARCHAR, $8::INTEGER) RETURNING customers.id, customers.created_at, customers.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 4.483s ago] (1, 'John Doe', '+919876543210', 'john@example.com', None, None, 'active', None)
+INFO     sqlalchemy.engine.Engine:base.py:1848 INSERT INTO services (shop_id, category_id, name, slug, description, base_price, estimated_processing_days, status) VALUES ($1::INTEGER, $2::INTEGER, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::NUMERIC(12, 2), $7::INTEGER, $8::VARCHAR) RETURNING services.id, services.created_at, services.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 4.481s ago] (1, None, 'PAN Card Service', 'pan-card', 'PAN Card Application', 100.0, 5, 'active')
+INFO     sqlalchemy.engine.Engine:base.py:1848 INSERT INTO applications (shop_id, customer_id, service_id, application_number, status, assigned_staff_id, notes) VALUES ($1::INTEGER, $2::INTEGER, $3::INTEGER, $4::VARCHAR, $5::VARCHAR, $6::INTEGER, $7::VARCHAR) RETURNING applications.id, applications.created_at, applications.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 4.479s ago] (1, 1, 1, 'APP-TEST-2024-0001', 'completed', None, None)
+----------------------------- Captured stdout call -----------------------------
+2026-09-25 18:19:41,515 INFO sqlalchemy.engine.Engine SELECT count(applications.id) AS count_1 
+FROM applications 
+WHERE applications.shop_id = $1::INTEGER AND date(applications.created_at) >= $2::DATE AND date(applications.created_at) <= $3::DATE
+2026-09-25 18:19:41,515 INFO sqlalchemy.engine.Engine [cached since 4.324s ago] (1, datetime.date(2026, 1, 1), datetime.date(2026, 9, 25))
+2026-09-25 18:19:41,516 INFO sqlalchemy.engine.Engine SELECT applications.status, count(applications.id) AS count 
+FROM applications 
+WHERE applications.shop_id = $1::INTEGER GROUP BY applications.status
+2026-09-25 18:19:41,516 INFO sqlalchemy.engine.Engine [cached since 0.3625s ago] (1,)
+2026-09-25 18:19:41,518 INFO sqlalchemy.engine.Engine SELECT date_trunc($1::VARCHAR, applications.created_at) AS period, count(applications.id) AS count 
+FROM applications 
+WHERE applications.shop_id = $2::INTEGER AND date(applications.created_at) >= $3::DATE AND date(applications.created_at) <= $4::DATE GROUP BY date_trunc($1::VARCHAR, applications.created_at) ORDER BY date_trunc($1::VARCHAR, applications.created_at)
+2026-09-25 18:19:41,518 INFO sqlalchemy.engine.Engine [generated in 0.00013s] ('month', 1, datetime.date(2026, 1, 1), datetime.date(2026, 9, 25))
+------------------------------ Captured log call -------------------------------
+INFO     sqlalchemy.engine.Engine:base.py:1848 SELECT count(applications.id) AS count_1 
+FROM applications 
+WHERE applications.shop_id = $1::INTEGER AND date(applications.created_at) >= $2::DATE AND date(applications.created_at) <= $3::DATE
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 4.324s ago] (1, datetime.date(2026, 1, 1), datetime.date(2026, 9, 25))
+INFO     sqlalchemy.engine.Engine:base.py:1848 SELECT applications.status, count(applications.id) AS count 
+FROM applications 
+WHERE applications.shop_id = $1::INTEGER GROUP BY applications.status
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 0.3625s ago] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1848 SELECT date_trunc($1::VARCHAR, applications.created_at) AS period, count(applications.id) AS count 
+FROM applications 
+WHERE applications.shop_id = $2::INTEGER AND date(applications.created_at) >= $3::DATE AND date(applications.created_at) <= $4::DATE GROUP BY date_trunc($1::VARCHAR, applications.created_at) ORDER BY date_trunc($1::VARCHAR, applications.created_at)
+INFO     sqlalchemy.engine.Engine:base.py:1848 [generated in 0.00013s] ('month', 1, datetime.date(2026, 1, 1), datetime.date(2026, 9, 25))
+--------------------------- Captured stdout teardown ---------------------------
+2026-09-25 18:19:41,547 INFO sqlalchemy.engine.Engine ROLLBACK
+2026-09-25 18:19:41,549 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-09-25 18:19:41,549 INFO sqlalchemy.engine.Engine TRUNCATE TABLE documents, applications, audit_logs, platform_manager_shops, shop_memberships, shops, users, customers, services, service_fields, service_required_documents, service_categories RESTART IDENTITY CASCADE
+2026-09-25 18:19:41,549 INFO sqlalchemy.engine.Engine [cached since 4.742s ago] ()
+2026-09-25 18:19:41,714 INFO sqlalchemy.engine.Engine COMMIT
+---------------------------- Captured log teardown -----------------------------
+INFO     sqlalchemy.engine.Engine:base.py:2715 ROLLBACK
+INFO     sqlalchemy.engine.Engine:base.py:2712 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1848 TRUNCATE TABLE documents, applications, audit_logs, platform_manager_shops, shop_memberships, shops, users, customers, services, service_fields, service_required_documents, service_categories RESTART IDENTITY CASCADE
+INFO     sqlalchemy.engine.Engine:base.py:1848 [cached since 4.742s ago] ()
+INFO     sqlalchemy.engine.Engine:base.py:2718 COMMIT
+_________ TestReportsService.test_get_service_report_multiple_services _________
+
+self = <tests.test_reports.TestReportsService object at 0x793adc863e30>
+db_session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x793adc3e4ef0>
+sample_shop = <app.models.shop.Shop object at 0x793adc35c5f0>
+sample_service = <app.models.service.Service object at 0x793adc1ae5d0>
+sample_service2 = <app.models.service.Service object at 0x793adc35caa0>
+sample_customer = <app.models.customer.Customer object at 0x793adc35c9b0>
+sample_customer2 = <app.models.customer.Customer object at 0x793adc35cd70>
+sample_user_staff = <app.models.user.User object at 0x793adc127c50>
+
+    @pytest.mark.asyncio
+    async def test_get_service_report_multiple_services(
+        self,
+        db_session: AsyncSession,
+        sample_shop: Shop,
+        sample_service: Service,
+        sample_service2: Service,
+        sample_customer: Customer,
+        sample_customer2: Customer,
+        sample_user_staff: User,
+    ):
+        """Test service report with multiple services."""
+        # Create application for service2
+        app2 = Application(
+            shop_id=sample_shop.id,
+            customer_id=sample_customer2.id,
+            service_id=sample_service2.id,
+            status=ApplicationStatus.COMPLETED.value,
+            application_number="APP-TEST-2024-0002",
+        )
+        db_session.add(app2)
+        await db_session.flush()
+    
+        # Create billing for app2
+        billing2 = Billing(
+            shop_id=sample_shop.id,
+            customer_id=sample_customer2.id,
+            application_id=app2.id,

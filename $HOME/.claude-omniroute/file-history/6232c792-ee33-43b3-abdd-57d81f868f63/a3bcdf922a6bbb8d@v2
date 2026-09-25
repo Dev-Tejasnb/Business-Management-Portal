@@ -1,0 +1,166 @@
+"""Shared pytest fixtures for Phase 2.
+
+Tests run against the real PostgreSQL database (reachable from the backend
+container). The schema is created once via ``Base.metadata.create_all``, the
+tables are truncated between tests, and the refresh-token session store is
+overridden with an in-memory implementation so no Redis is required.
+
+NOTE: We use session-scoped event loop (configured in pyproject.toml) because
+the global SQLAlchemy engine is created once and reused across all tests.
+Function-scoped loops cause "Task attached to a different loop" errors.
+"""
+
+from __future__ import annotations
+
+from enum import Enum
+from collections.abc import AsyncIterator
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
+
+from app.db.base import Base
+from app.core.database import dispose_engine, get_session_factory, init_engine
+from app.core.security import hash_password
+from app.core.session import InMemorySessionStore
+from app.main import create_app
+from app.modules.auth.dependencies import get_session_store
+from app.models import Shop, ShopMembership, User
+from app.models.shop import ShopStatus
+from app.models.manager_assignment import PlatformManagerShop
+
+import app.models  # noqa: F401  # ensure all models are registered
+
+
+@pytest.fixture
+async def db_session() -> AsyncIterator[AsyncSession]:
+    """Provide a database session for tests."""
+    factory = get_session_factory()
+    async with factory() as session:
+        yield session
+
+
+@pytest.fixture(scope="session", autouse=True)
+async def _prepare_schema():
+    """Create all tables once for the test session."""
+    engine = init_engine()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    await dispose_engine()
+
+
+@pytest.fixture
+async def client() -> AsyncIterator[AsyncClient]:
+    """Async ASGI test client with an in-memory session store."""
+    app = create_app()
+    store = InMemorySessionStore()
+    app.dependency_overrides[get_session_store] = lambda: store
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        ac._session_store = store  # type: ignore[attr-defined]
+        yield ac
+
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+async def _clean_db():
+    """Reset all tables before and after each test."""
+    factory = get_session_factory()
+    async with factory() as session:
+        await session.execute(
+            text(
+                "TRUNCATE TABLE documents, applications, audit_logs, platform_manager_shops, shop_memberships, shops, users, customers, services, service_fields, service_required_documents, service_categories "
+                "RESTART IDENTITY CASCADE"
+            )
+        )
+        await session.commit()
+    yield
+    async with factory() as session:
+        await session.execute(
+            text(
+                "TRUNCATE TABLE documents, applications, audit_logs, platform_manager_shops, shop_memberships, shops, users, customers, services, service_fields, service_required_documents, service_categories "
+                "RESTART IDENTITY CASCADE"
+            )
+        )
+        await session.commit()
+
+
+async def _value(v):
+    return v.value if isinstance(v, Enum) else v
+
+
+@pytest.fixture
+async def create_user():
+    async def _make(
+        email: str,
+        *,
+        password: str = "Password123!",
+        full_name: str = "Test User",
+        platform_role=None,
+        active: bool = True,
+    ) -> User:
+        factory = get_session_factory()
+        async with factory() as session:
+            user = User(
+                email=email,
+                full_name=full_name,
+                hashed_password=hash_password(password),
+                platform_role=await _value(platform_role),
+                is_active=active,
+            )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+            return user
+
+    return _make
+
+
+@pytest.fixture
+async def create_shop():
+    async def _make(code: str, name: str, slug: str) -> Shop:
+        factory = get_session_factory()
+        async with factory() as session:
+            shop = Shop(code=code, name=name, slug=slug, status=ShopStatus.ACTIVE.value)
+            session.add(shop)
+            await session.commit()
+            await session.refresh(shop)
+            return shop
+
+    return _make
+
+
+@pytest.fixture
+async def create_membership():
+    async def _make(user: User, shop: Shop, role, active: bool = True) -> ShopMembership:
+        factory = get_session_factory()
+        async with factory() as session:
+            membership = ShopMembership(
+                user_id=user.id,
+                shop_id=shop.id,
+                role=await _value(role),
+                is_active=active,
+            )
+            session.add(membership)
+            await session.commit()
+            await session.refresh(membership)
+            return membership
+
+    return _make
+
+
+@pytest.fixture
+async def login(client: AsyncClient):
+    async def _login(email: str, password: str = "Password123!") -> AsyncClient:
+        resp = await client.post(
+            "/api/v1/auth/login", json={"email": email, "password": password}
+        )
+        assert resp.status_code == 200, resp.text
+        token = resp.json()["access_token"]
+        client.headers["Authorization"] = f"Bearer {token}"
+        return client
+
+    return _login

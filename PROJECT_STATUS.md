@@ -50,6 +50,7 @@ Customer → Service → Application → Documents → Billing → Payment → S
 | 6 | Application Management Core | COMPLETE AND VERIFIED | 23/23 application tests passed, frontend build passed, Docker services healthy, tenant isolation verified, application RBAC verified, dynamic field validation verified, staff assignment verified, audit logging verified, responsive frontend verified |
 | 7 | Document Management | COMPLETE AND VERIFIED | 31/31 document tests passed (136 total), frontend build passed, Docker services healthy, tenant isolation verified, document RBAC verified, upload/verify/reject/archive/delete verified, audit logging verified, responsive frontend verified |
 | 8 | Billing & Payments | COMPLETE AND VERIFIED | 136/136 backend tests passed, frontend build passed, Docker services healthy, tenant isolation verified, billing/payment RBAC verified, invoice generation verified, concurrency protection verified, audit logging verified, responsive frontend verified |
+| 9 | Reports & Financial Analytics | COMPLETE AND VERIFIED | 28/28 report tests passed, frontend build passed, Docker services healthy, tenant isolation verified, report RBAC verified, Decimal precision verified, export functionality verified |
 
 **Fixes made during Phase 5.1:**
 1. Missing Archive icon import
@@ -77,69 +78,39 @@ Customer → Service → Application → Documents → Billing → Payment → S
 4. Fixed import of `get_session` in billing router (changed to `get_db_session` alias)
 5. Extended `alembic_version.version_num` column length from 32 to 64 characters for longer migration names
 
+**Fixes made during Phase 9:**
+1. Fixed `KeyError: 'methods'` in payment method analytics by mapping `by_method` to `methods` in service layer
+2. Fixed `KeyError: 'group_by'` in application report by adding `group_by` to return payload
+3. Fixed `AttributeError: 'Application' has no attribute 'created_by'` by filtering on `assigned_staff_id`
+4. Fixed test fixture isolation issues (13 tests) by explicitly injecting `sample_user_owner`, `sample_application`, `sample_billing`, `sample_payment`, `sample_document` fixtures due to pytest-asyncio TRUNCATE TABLE behavior
+5. Fixed `NotNullViolationError` in document analytics test by setting `uploaded_by` field
+6. Installed missing frontend dependencies: `date-fns`, `recharts`, `@radix-ui/react-switch`
+
 ## Current Phase
 
-**Phase 8 — Billing & Payments**  
+**Phase 9 — Reports & Financial Analytics**  
 Status: **COMPLETE AND VERIFIED**
-
-Phase 8 connects: **Application → Service Price → Billing → Payment → Receipt**
 
 ### Implementation Summary
 
-**Backend - Billing Module (`backend/app/modules/billing/`):**
-- `router.py` — Full API endpoints (billing CRUD, issue/void, items CRUD, payments CRUD, preview calculation, next invoice number)
-- `schemas.py` — Pydantic schemas (BillingCreate, BillingUpdate, BillingResponse, BillingItemCreate, BillingItemUpdate, BillingItemResponse, PaymentCreate, PaymentUpdate, PaymentResponse, BillingCalculationPreview, InvoiceNumberResponse)
-- `service.py` — BillingService and PaymentService with business logic (concurrency protection, price snapshots, invoice generation, validation, audit)
+**Backend - Reports Module (`backend/app/modules/reports/`):**
+- `router.py` — 13 JSON report endpoints and 13 CSV export endpoints with `REPORT_VIEW` and `REPORT_EXPORT` RBAC enforcement and shop isolation.
+- `schemas.py` — Pydantic schemas for all report endpoints and date filters.
+- `service.py` — ReportsService implementing aggregation logic using Decimal arithmetic and SQLAlchemy date and aggregate functions.
 - `__init__.py` — Module init
 
-**Database:**
-- Models: `backend/app/models/billing.py` (Billing, BillingItem, Payment with enums and check constraints)
-- Migration: `0008_create_billing_payment_tables.py` — Creates billings, billing_items, payments tables with indexes, FKs, check constraints
-
-**Security:**
-- RBAC permissions: BILLING_VIEW, BILLING_CREATE, BILLING_UPDATE, BILLING_DISCOUNT, BILLING_CHARGE, BILLING_VOID, PAYMENT_VIEW, PAYMENT_CREATE, PAYMENT_UPDATE
-- Tenant isolation via shop_id on all queries
-- Concurrency protection via SELECT FOR UPDATE during payment processing
-- Deterministic invoice numbers: INV-{SHOP_CODE}-{YEAR}-{SEQUENTIAL}
-- Price snapshots (service_amount stored at billing creation)
-- Reference handling: digital payments require reference_number unless exception with reason
-- Discount handling: discount_reason required when discount applied
+**Security & Isolation:**
+- RBAC permissions: `REPORT_VIEW` (Owner, Manager, Financial Staff) and `REPORT_EXPORT` (Owner, Manager).
+- Strict multi-tenant isolation on every report and CSV export query via `shop_id`.
+- Decimal / `Numeric(12,2)` precision for all financial calculations.
 
 **Frontend (`frontend/`):**
-- `src/types/billing.ts` — TypeScript types matching backend schemas
-- `components/billing/billing-manager.tsx` — Full Billing Manager component with:
-  - Billing creation/edit with line items (service + non-service charges)
-  - Discount management (fixed/percentage with reason requirement)
-  - Payment recording with method selection and reference handling
-  - Billing preview calculation dialog
-  - Invoice number preview
-  - Billing status management (draft → issued → void)
-  - Payment history with edit capability
-- `lib/api.ts` — Billing API client with all CRUD operations
-- `lib/utils.ts` — Added `formatCurrency` utility function
-- `app/dashboard/applications/[id]/page.tsx` — Application Detail page with embedded BillingManager and permission-based visibility
+- `app/dashboard/reports/page.tsx` — Complete 13-tab dashboard with KPI cards, Recharts visualizations, date range picker with presets, table views, and CSV export.
+- `src/types/reports.ts` — TypeScript interfaces matching all report schemas.
+- `lib/api.ts` — API client integration for all report data and CSV downloads.
 
 **Tests (`backend/tests/`):**
-- All 136 existing backend tests pass
-- Migration applied and verified in PostgreSQL
-- Alembic version stamped to head (0008_create_billing_payment_tables)
-
-### Verification Results
-
-- 136/136 backend tests passed
-- Frontend build: `npm run build` succeeds (19 routes)
-- Docker services healthy
-- Tenant isolation verified (cross-shop returns 403)
-- Billing RBAC verified (Owner/Manager can create/update/discount/charge/void; Financial Staff can view/payment; Staff can view payments)
-- Payment RBAC verified (Owner/Manager/Financial Staff can create payments; all can view)
-- Invoice number generation verified (deterministic format with sequential numbering)
-- Concurrency protection verified (SELECT FOR UPDATE during payment creation)
-- Price snapshot verified (service amount captured at billing creation)
-- Discount handling verified (reason required when discount applied)
-- Reference handling verified (digital payments require reference unless exception)
-- Audit logging on all mutations verified
-- Responsive frontend verified
-- No remaining Phase 8 issues
+- `test_reports.py` — 28/28 passing automated tests covering all 13 reports, cross-shop isolation, date presets, custom date range validation, and voided billing exclusion.
 
 ---
 
@@ -195,23 +166,34 @@ Phase 8 connects: **Application → Service Price → Billing → Payment → Re
 - Frontend BillingManager component
 - Migration applied and verified
 
+### Phase 9 — Reports & Financial Analytics ✅
+- 13 report endpoints: Summary, Revenue, Collection, Payment Methods, Applications, Services, Customers, Staff, Outstanding, Billing, Discounts, Financial Trend, Documents
+- 13 CSV export endpoints matching each report
+- Decimal/Numeric(12,2) monetary precision with string serialization in JSON
+- Recharts visualizations (BarChart, LineChart, PieChart) on 13-tab frontend dashboard
+- Date range picker with presets (today, yesterday, last_7_days, last_30_days, this_month, last_month, this_year, custom)
+- RBAC: REPORT_VIEW (Owner, Manager, Financial Staff) and REPORT_EXPORT (Owner, Manager)
+- Strict tenant isolation (shop_id) on all queries
+- Cross-shop isolation verified (403 on other shop data)
+- 28/28 automated tests passing
+- Date preset and custom range validation tests
+- Voided billing exclusion from all financial reports
+
 ---
 
 ## Next Phase (Planning)
 
-**Phase 9 — Receipt Generation & Reporting**  
+**Phase 10 — Receipt Generation & Communication**  
 Status: **PLANNED**
 
-Phase 9 connects: **Payment → Receipt → Reporting**
+Phase 10 connects: **Payment → Receipt → Delivery**
 
 Planned scope:
-- Receipt model and generation
-- PDF receipt templates
+- Receipt model and PDF generation
+- Receipt templates with branding
 - Email/SMS receipt delivery
-- Financial reports (daily/weekly/monthly)
 - GST/invoice compliance
-- Audit trail reports
-- Dashboard analytics
+- Print/preview receipt functionality
 
 ---
 
@@ -239,9 +221,10 @@ Planned scope:
 | Service tests | Not counted | Not separately verified |
 | Application tests | 23 | ✅ PASS |
 | Document tests | 31 | ✅ PASS |
+| Report tests | 28 | ✅ PASS |
 | Phase 3.1 security tests | Multiple | ✅ PASS |
 | Tenancy tests | Multiple | ✅ PASS |
-| **Total** | **136** | ✅ **ALL PASS** |
+| **Total** | **164** | ✅ **ALL PASS** |
 
 ---
 
@@ -265,6 +248,7 @@ Planned scope:
 | `/dashboard/services/[serviceId]` | ✅ Implemented | Service detail |
 | `/dashboard/services/[serviceId]/edit` | ✅ Implemented | Edit service |
 | `/dashboard/staff` | ✅ Implemented | Staff management |
+| `/dashboard/reports` | ✅ Implemented | 13-tab Reports dashboard with charts & CSV export |
 | `/platform/shops` | ✅ Implemented | Platform shop management |
 | `/platform/shops/[id]` | ✅ Implemented | Platform shop detail |
 
@@ -295,6 +279,7 @@ Planned scope:
 - `applications` — Application management (Phase 6)
 - `documents` — Document management (Phase 7)
 - `billing` — Billing & payments (Phase 8)
+- `reports` — Reports & analytics (Phase 9)
 
 ---
 
@@ -304,9 +289,10 @@ Planned scope:
 - Phase 6: Application management completed (23/23 tests pass, frontend build passes, Docker healthy)
 - Phase 7: Document management completed (31/31 tests pass, 136 total, frontend build passes, Docker healthy)
 - Phase 8: Billing & payments completed (136/136 tests pass, frontend build passes, Docker healthy, migration applied)
+- Phase 9: Reports & financial analytics completed (28/28 tests pass, 164 total, frontend build passes, Docker healthy)
 
 ---
 
 ## Known Issues
 
-None at this time — all Phase 8 deliverables complete and verified.
+None at this time — all Phase 9 deliverables complete and verified.

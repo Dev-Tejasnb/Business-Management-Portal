@@ -1,0 +1,40 @@
+"""ORM models.
+
+Alembic discovers models through this package so ``--autogenerate`` sees all
+tables. Importing each model module registers its tables on ``Base.metadata``.
+"""
+
+from app.db.base import Base
+
+# Import models to register their tables/metadata (order matters for FKs).
+from app.models.audit_log import AuditLog  # noqa: E402,F401
+from app.models.customer import Customer, CustomerStatus  # noqa: E402,F401
+from app.models.manager_assignment import PlatformManagerShop  # noqa: E402,F401
+from app.models.membership import ShopMembership  # noqa: E402,F401
+from app.models.service import Service  # noqa: E402,F401
+from app.models.service_category import ServiceCategory  # noqa: E402,F401
+from app.models.service_field import ServiceField, ServiceRequiredDocument  # noqa: E402,F401
+from app.models.shop import Shop, ShopStatus  # noqa: E402,F401
+from app.models.user import User  # noqa: E402,F401
+from app.models.application import Application, ApplicationStatus  # noqa: E402,F401
+from app.models.document import Document, DocumentStatus  # noqa: E402,F401
+
+__all__ = [
+    "Base",
+    "User",
+    "Shop",
+    "ShopStatus",
+    "ShopMembership",
+    "AuditLog",
+    "PlatformManagerShop",
+    "Service",
+    "ServiceCategory",
+    "ServiceField",
+    "ServiceRequiredDocument",
+    "Customer",
+    "CustomerStatus",
+    "Application",
+    "ApplicationStatus",
+    "Document",
+    "DocumentStatus",
+]

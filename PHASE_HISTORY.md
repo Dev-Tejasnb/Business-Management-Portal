@@ -532,9 +532,120 @@ None.
 
 ---
 
+## Phase 9 — Reports & Financial Analytics
+
+**Status:** COMPLETE AND VERIFIED
+
+### Objective
+
+Connect Billing → Payment → Reports & Analytics with 13 comprehensive financial reports, CSV exports, multi-tenant isolation, RBAC enforcement, and a 13-tab frontend dashboard with visualizations.
+
+### Implemented
+
+- 13 Report endpoints under `/api/v1/reports/*`:
+  1. **Summary** — Total billings, amounts, collection rate, customer/application counts, billing status breakdown
+  2. **Revenue** — Total revenue, by_service, by_staff, by_category breakdowns
+  3. **Collection** — Total collected, by_method, by_staff, by_period breakdowns
+  4. **Payment Methods** — Analytics from collection report (methods key)
+  5. **Applications** — Total, by_status, by_service, by_staff, trend (group_by month/day)
+  6. **Services** — Total, by_category, usage_count, revenue_per_service
+  7. **Customers** — Total, active/inactive, by_staff, revenue_per_customer
+  8. **Staff** — Total staff, applications_per_staff, revenue_per_staff, collection_per_staff (filters by assigned_staff_id)
+  9. **Outstanding** — Outstanding items with search, payment_status filter, pagination
+  10. **Billing** — Total billings, status counts (issued/paid/void/partial/draft), amounts
+  11. **Discounts** — Total discounts, by_type (fixed/percentage), by_staff, average
+  12. **Financial Trend** — Monthly trend: billings, revenue, collections, outstanding, billings_count
+  13. **Documents** — Total, by_status, by_category, verification_rate
+
+- 13 CSV export endpoints under `/api/v1/reports/export/*` matching each report
+- Decimal/Numeric(12,2) precision for all monetary values, serialized as strings in JSON
+- RBAC permissions: `REPORT_VIEW` (Owner, Manager, Financial Staff), `REPORT_EXPORT` (Owner, Manager)
+- Strict tenant isolation on all queries via `shop_id` (cross-shop returns 403)
+- Date range presets: today, yesterday, last_7_days, last_30_days, this_month, last_month, this_year, custom
+- Date range validation (from_date ≤ to_date, returns 400 on invalid)
+- Voided billing exclusion from all financial aggregations (billing_status != 'void')
+- Frontend 13-tab dashboard with KPI metric cards, Recharts visualizations (BarChart, LineChart, PieChart), table views with pagination, search/filter, and CSV export buttons
+
+### Database
+
+- No new migrations (reports use existing tables: billings, billing_items, payments, applications, services, customers, users, documents)
+
+### Backend
+
+- Reports module (`backend/app/modules/reports/`):
+  - `router.py` — 26 REST endpoints (13 JSON + 13 CSV) with RBAC and tenant isolation
+  - `schemas.py` — Pydantic schemas for all 13 report responses and date filter requests
+  - `service.py` — `ReportsService` with aggregation logic using SQLAlchemy func.sum, func.count, func.date_trunc, func.date, func.coalesce, case expressions
+  - `__init__.py` — Module init
+- Core roles update (`backend/app/core/roles.py`): Added `REPORT_VIEW` and `REPORT_EXPORT` permissions to role mappings
+
+### Frontend
+
+- `frontend/src/types/reports.ts` — TypeScript interfaces matching all backend report schemas
+- `frontend/lib/api.ts` — `reportsApi` with all 26 methods (get + export for each report)
+- `frontend/app/dashboard/reports/page.tsx` — Complete 13-tab dashboard with:
+  - 13 tabs matching each report type
+  - KPI metric cards per tab (summary totals, rates, counts)
+  - Recharts visualizations: BarChart (revenue/collection), LineChart (financial trend), PieChart (payment methods, status distributions)
+  - Date range picker with 8 presets + custom range
+  - Table views with search, filters, pagination
+  - CSV download buttons triggering export endpoints
+
+### Security
+
+- Shop-scoped access across all 26 endpoints (tenant isolation)
+- Cross-tenant validation returns 403 (verified in tests)
+- RBAC enforcement: REPORT_VIEW for JSON endpoints, REPORT_EXPORT for CSV endpoints
+- Voided billing excluded from all financial reports
+- Comprehensive audit trails (inherited from billing/document mutations)
+
+### Tests
+
+- `backend/tests/test_reports.py`: 28 comprehensive async tests covering:
+  - All 13 report endpoints with various data scenarios
+  - Payment method analytics key mapping (`by_method` → `methods`)
+  - Application report `group_by` parameter in response
+  - Staff report filtering by `assigned_staff_id`
+  - Service report with multiple services
+  - Customer report with unpaid billings
+  - Outstanding report pagination, search, payment_status filter
+  - Document analytics with rejected documents (uploaded_by fixture)
+  - Cross-shop isolation (403 on other shop data)
+  - All 8 date presets validation
+  - Custom date range validation (from_date > to_date returns 400)
+  - Voided billing exclusion from reports
+- Total test suite: 164/164 passed in container
+
+### Verification
+
+- Backend tests: 164 passed (28 report tests + 136 existing)
+- Frontend build: `npm run build` completed successfully (19 static & dynamic routes generated)
+- Docker Compose: All services (backend, frontend, postgres, redis, minio) healthy and running
+- Tenant isolation verified (cross-shop returns 403)
+- Report RBAC verified (Owner/Manager/Financial Staff: view; Owner/Manager: export)
+- Decimal precision verified (string serialization in JSON)
+- Date preset and custom range validation verified
+- Voided billing exclusion verified
+- Frontend dashboard: 13 tabs, charts render, CSV downloads work
+- No remaining Phase 9 issues
+
+### Fixes Applied
+
+1. Fixed `KeyError: 'methods'` in `test_get_payment_method_analytics` by mapping `by_method` → `methods` in `get_payment_method_analytics` service method
+2. Fixed `KeyError: 'group_by'` in `test_get_application_report_group_by_month` by adding `group_by` to `get_application_report` return payload
+3. Fixed `AttributeError: type object 'Application' has no attribute 'created_by'` in `test_get_staff_report` by filtering on `Application.assigned_staff_id == user.id`
+4. Fixed test fixture isolation issues in 13 tests by explicitly injecting `sample_user_owner`, `sample_application`, `sample_billing`, `sample_payment`, `sample_document` fixtures due to pytest-asyncio TRUNCATE TABLE behavior in conftest.py
+5. Fixed `NotNullViolationError` in `test_get_document_analytics_with_rejected` by setting `uploaded_by=sample_user_owner.id` and adding `sample_document` fixture
+6. Installed missing frontend dependencies: `date-fns`, `recharts`, `@radix-ui/react-switch`
+
+### Remaining Issues
+
+None.
+
+---
+
 *Future phases (DO NOT IMPLEMENT EARLY):*
-- Receipt Generation & Reporting
+- Receipt Generation & Communication
 - SMS / WhatsApp / Notifications
 - Customer chat / Staff chat
-- Analytics / Reports
 - Subscriptions / Coupons / Offers

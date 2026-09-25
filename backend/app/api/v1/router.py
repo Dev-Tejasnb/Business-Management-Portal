@@ -16,6 +16,7 @@ from app.modules.shops.router import router as shops_router
 from app.modules.staff.router import router as staff_router
 from app.modules.applications.router import router as applications_router
 from app.modules.documents.router import router as documents_router
+from app.modules.reports.router import router as reports_router
 
 api_router = APIRouter()
 api_router.include_router(health_router, prefix="/health", tags=["health"])
@@ -28,3 +29,4 @@ api_router.include_router(customers_router, tags=["customers"])
 api_router.include_router(applications_router, tags=["applications"])
 api_router.include_router(documents_router, tags=["documents"])
 api_router.include_router(billing_router, tags=["billing"])
+api_router.include_router(reports_router, tags=["reports"])

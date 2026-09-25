@@ -1,0 +1,421 @@
+/**
+ * Lightweight API client for the backend.
+ *
+ * - Auth requests are proxied through Next.js API routes so the browser never
+ *   talks directly to the backend and HTTP-only cookies flow through the proxy.
+ * - Access tokens are held **only** in memory (never localStorage/sessionStorage)
+ *   to limit XSS exposure.
+ */
+
+let accessToken: string | null = null;
+let accessTokenExpiry: number | null = null;
+
+export function setAccessToken(token: string, expiresIn: number) {
+  accessToken = token;
+  // Set expiry slightly earlier to avoid using an about-to-expire token.
+  accessTokenExpiry = Date.now() + (expiresIn - 30) * 1000;
+}
+
+export function clearAccessToken() {
+  accessToken = null;
+  accessTokenExpiry = null;
+}
+
+export function getAccessToken(): string | null {
+  if (!accessToken || !accessTokenExpiry) return null;
+  if (Date.now() >= accessTokenExpiry) return null;
+  return accessToken;
+}
+
+// Base URL for Next.js API proxy routes (same origin).
+const AUTH_PROXY = "/api/auth";
+
+// Base URL for API calls via Next.js rewrites proxy to backend.
+// Uses /api/v1 which is rewritten to http://backend:8000/api/v1 by next.config.mjs
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
+
+/** Authenticated fetch against the backend API. */
+export async function apiFetch(
+  path: string,
+  init: RequestInit = {}
+): Promise<Response> {
+  const headers = new Headers(init.headers);
+  const token = getAccessToken();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  headers.set("Content-Type", "application/json");
+  return fetch(`${API_BASE}${path}`, { ...init, headers, credentials: "include" });
+}
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+export interface Shop {
+  id: number;
+  code: string;
+  name: string;
+  slug: string;
+  status: "active" | "inactive" | "suspended";
+  created_at: string;
+  updated_at: string;
+  primary_owner?: {
+    id: number;
+    email: string;
+    full_name: string;
+  } | null;
+}
+
+export interface ShopListResponse {
+  items: Shop[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface CreateShopPayload {
+  name: string;
+  slug: string;
+  owner_user_id?: number;
+}
+
+export interface UpdateShopPayload {
+  name?: string;
+  slug?: string;
+}
+
+export interface ShopManager {
+  id: number;
+  user_id: number;
+  shop_id: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  user: {
+    id: number;
+    email: string;
+    full_name: string;
+    platform_role: string;
+  };
+}
+
+export interface StaffMember {
+  membership_id: number;
+  user_id: number;
+  shop_id: number;
+  role: "shop_owner" | "shop_manager" | "staff" | "financial_staff";
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  user_email: string;
+  user_name: string;
+}
+
+export interface StaffListResponse {
+  items: StaffMember[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface CreateStaffPayload {
+  email: string;
+  full_name: string;
+  password: string;
+  role: "shop_manager" | "staff" | "financial_staff";
+}
+
+export interface UpdateStaffPayload {
+  full_name?: string;
+}
+
+export interface ChangeStaffRolePayload {
+  role: "shop_owner" | "shop_manager" | "staff" | "financial_staff";
+}
+
+export interface PaginatedParams {
+  page?: number;
+  page_size?: number;
+  search?: string;
+  role?: string;
+  status?: string;
+  is_active?: boolean;
+}
+
+// ── Auth API (proxied through Next.js for cookie management) ──────────────
+
+export interface AuthUser {
+  id: number;
+  email: string;
+  full_name: string;
+  platform_role: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LoginResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  user: AuthUser;
+}
+
+export async function login(
+  email: string,
+  password: string
+): Promise<LoginResponse> {
+  const res = await fetch(`${AUTH_PROXY}/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, body?.error?.message ?? "Login failed");
+  }
+  const data: LoginResponse = await res.json();
+  setAccessToken(data.access_token, data.expires_in);
+  return data;
+}
+
+export async function refreshToken(): Promise<LoginResponse | null> {
+  const res = await fetch(`${AUTH_PROXY}/refresh`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) return null;
+  const data: LoginResponse = await res.json();
+  setAccessToken(data.access_token, data.expires_in);
+  return data;
+}
+
+export async function logout(): Promise<void> {
+  await fetch(`${AUTH_PROXY}/logout`, {
+    method: "POST",
+    credentials: "include",
+    headers: accessToken
+      ? { Authorization: `Bearer ${accessToken}` }
+      : undefined,
+  });
+  clearAccessToken();
+}
+
+export async function fetchCurrentUser(): Promise<AuthUser> {
+  const token = getAccessToken();
+  if (!token) throw new ApiError(401, "Not authenticated");
+  const res = await fetch(`${AUTH_PROXY}/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+    credentials: "include",
+  });
+  if (!res.ok) throw new ApiError(res.status, "Failed to load user");
+  return res.json();
+}
+
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+// ── Platform Shops API ──────────────────────────────────────────────────────
+
+export const platformApi = {
+  /** List shops with search, status filter, pagination */
+  async listShops(params: PaginatedParams = {}): Promise<ShopListResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.page) searchParams.set("page", String(params.page));
+    if (params.page_size) searchParams.set("page_size", String(params.page_size));
+    if (params.search) searchParams.set("search", params.search);
+    if (params.status) searchParams.set("status", params.status);
+    const res = await apiFetch(`/platform/shops?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to list shops");
+    return res.json();
+  },
+
+  /** Create a new shop */
+  async createShop(payload: CreateShopPayload): Promise<Shop> {
+    const res = await apiFetch("/platform/shops", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, body?.error?.message ?? "Failed to create shop");
+    }
+    return res.json();
+  },
+
+  /** Get shop by ID */
+  async getShop(shopId: number): Promise<Shop> {
+    const res = await apiFetch(`/platform/shops/${shopId}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to fetch shop");
+    return res.json();
+  },
+
+  /** Update shop name/slug */
+  async updateShop(shopId: number, payload: UpdateShopPayload): Promise<Shop> {
+    const res = await apiFetch(`/platform/shops/${shopId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to update shop");
+    return res.json();
+  },
+
+  /** Activate a shop */
+  async activateShop(shopId: number): Promise<Shop> {
+    const res = await apiFetch(`/platform/shops/${shopId}/activate`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to activate shop");
+    return res.json();
+  },
+
+  /** Deactivate or suspend a shop */
+  async deactivateShop(shopId: number, status: "inactive" | "suspended" = "inactive"): Promise<Shop> {
+    const res = await apiFetch(`/platform/shops/${shopId}/deactivate`, {
+      method: "POST",
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to deactivate shop");
+    return res.json();
+  },
+
+  /** Change shop owner */
+  async changeOwner(shopId: number, newOwnerUserId: number): Promise<Shop> {
+    const res = await apiFetch(`/platform/shops/${shopId}/owner`, {
+      method: "POST",
+      body: JSON.stringify({ new_owner_user_id: newOwnerUserId }),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to change owner");
+    return res.json();
+  },
+
+  /** List assigned platform managers for a shop */
+  async listManagers(shopId: number): Promise<ShopManager[]> {
+    const res = await apiFetch(`/platform/shops/${shopId}/managers`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to list managers");
+    return res.json();
+  },
+
+  /** Assign a platform manager to a shop */
+  async assignManager(shopId: number, userId: number, isActive = true): Promise<ShopManager> {
+    const res = await apiFetch(`/platform/shops/${shopId}/managers`, {
+      method: "POST",
+      body: JSON.stringify({ user_id: userId, is_active: isActive }),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to assign manager");
+    return res.json();
+  },
+
+  /** Unassign a platform manager from a shop */
+  async unassignManager(shopId: number, userId: number): Promise<void> {
+    const res = await apiFetch(`/platform/shops/${shopId}/managers/${userId}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to unassign manager");
+  },
+
+  /** Update manager assignment status */
+  async updateManager(shopId: number, userId: number, isActive: boolean): Promise<ShopManager> {
+    const res = await apiFetch(`/platform/shops/${shopId}/managers/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ is_active: isActive }),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to update manager");
+    return res.json();
+  },
+};
+
+// ── Staff API (shop-scoped) ──────────────────────────────────────────────────
+
+export const staffApi = {
+  /** List staff members with search, role, active filters */
+  async listStaff(shopId: number, params: PaginatedParams = {}): Promise<StaffListResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.page) searchParams.set("page", String(params.page));
+    if (params.page_size) searchParams.set("page_size", String(params.page_size));
+    if (params.search) searchParams.set("search", params.search);
+    if (params.role) searchParams.set("role", params.role);
+    if (params.is_active !== undefined) searchParams.set("is_active", String(params.is_active));
+    const res = await apiFetch(`/shops/${shopId}/staff?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to list staff");
+    return res.json();
+  },
+
+  /** Create a new staff member */
+  async createStaff(shopId: number, payload: CreateStaffPayload): Promise<StaffMember> {
+    const res = await apiFetch(`/shops/${shopId}/staff`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, body?.error?.message ?? "Failed to create staff");
+    }
+    return res.json();
+  },
+
+  /** Get staff member by membership ID */
+  async getStaff(shopId: number, membershipId: number): Promise<StaffMember> {
+    const res = await apiFetch(`/shops/${shopId}/staff/${membershipId}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to fetch staff");
+    return res.json();
+  },
+
+  /** Update staff profile */
+  async updateStaff(shopId: number, membershipId: number, payload: UpdateStaffPayload): Promise<StaffMember> {
+    const res = await apiFetch(`/shops/${shopId}/staff/${membershipId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to update staff");
+    return res.json();
+  },
+
+  /** Change staff role */
+  async changeRole(shopId: number, membershipId: number, role: ChangeStaffRolePayload["role"]): Promise<StaffMember> {
+    const res = await apiFetch(`/shops/${shopId}/staff/${membershipId}/role`, {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to change role");
+    return res.json();
+  },
+
+  /** Activate staff membership */
+  async activateStaff(shopId: number, membershipId: number): Promise<StaffMember> {
+    const res = await apiFetch(`/shops/${shopId}/staff/${membershipId}/activate`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to activate staff");
+    return res.json();
+  },
+
+  /** Deactivate staff membership */
+  async deactivateStaff(shopId: number, membershipId: number): Promise<StaffMember> {
+    const res = await apiFetch(`/shops/${shopId}/staff/${membershipId}/deactivate`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to deactivate staff");
+    return res.json();
+  },
+};
+
+// ── Authenticated user's shop membership ──────────────────────────────────────
+
+export async function getMyMembership(shopId: number): Promise<StaffMember> {
+  const res = await apiFetch(`/shops/${shopId}/memberships/me`);
+  if (!res.ok) throw new ApiError(res.status, "Failed to fetch membership");
+  return res.json();
+}
