@@ -7,7 +7,8 @@ from typing import Optional, List
 from decimal import Decimal
 from fastapi import APIRouter, Depends, Query, status, HTTPException
 from fastapi.responses import StreamingResponse
-from sqlalchemy import and_, selectinload
+from sqlalchemy import and_
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import get_audit_service
@@ -28,12 +29,12 @@ from app.modules.billing.schemas import (
     PaymentListResponse,
     PaymentResponse,
     PaymentUpdate,
+    SendReceiptRequest,
+    SendReceiptResponse,
 )
 from app.modules.billing.service import BillingService, PaymentService
 from app.modules.billing.receipt_service import ReceiptService
 from app.modules.communication.service import CommunicationService
-from app.core.dependency import get_communication_service
-from app.modules.billing.receipt_schemas import SendReceiptRequest, SendReceiptResponse
 from app.models.billing import Billing, BillingItem, BillingStatus, Payment, PaymentStatus
 from app.models.shop import Shop
 from app.models.receipt import Receipt

@@ -14,7 +14,7 @@ from typing import Optional
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
-from app.models.communication import (
+from app.models.receipt import (
     CommunicationChannel,
     CommunicationHistory,
     CommunicationStatus,

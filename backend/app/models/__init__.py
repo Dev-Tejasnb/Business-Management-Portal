@@ -27,6 +27,14 @@ from app.models.shop import Shop, ShopStatus  # noqa: E402,F401
 from app.models.user import User  # noqa: E402,F401
 from app.models.application import Application, ApplicationStatus  # noqa: E402,F401
 from app.models.document import Document, DocumentStatus  # noqa: E402,F401
+from app.models.receipt import (  # noqa: E402,F401
+    Receipt,
+    ReceiptStatus,
+    ReceiptType,
+    CommunicationHistory,
+    CommunicationChannel,
+    CommunicationStatus,
+)
 
 __all__ = [
     "Base",
