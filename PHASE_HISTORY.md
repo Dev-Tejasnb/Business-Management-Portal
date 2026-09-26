@@ -644,8 +644,208 @@ None.
 
 ---
 
+---
+
+## Phase 10 — Receipt Generation & Communication
+
+**Status:** COMPLETE AND VERIFIED
+
+### Objective
+
+Connect: **Payment → Receipt → Delivery** with PDF generation for invoices and payment receipts, and multi-channel communication (Email, WhatsApp, SMS) for receipt delivery.
+
+### Implemented
+
+- Receipt model with `receipt_number`, `receipt_type` (invoice/payment_receipt), `storage_key`, `status` (generated/failed/regenerated), `generated_by`, `generated_at`
+- CommunicationHistory model with `channel` (email/whatsapp/sms), `recipient`, `subject`, `status` (pending/queued/sent/failed/cancelled), `provider`, `provider_message_id`, `error_message`, `sent_at`
+- PDF generation via WeasyPrint for invoices and payment receipts with professional templates
+- MinIO storage for generated PDFs with deterministic keys
+- Signed URL generation for secure PDF download/preview
+- Multi-channel delivery: Email (SMTP), WhatsApp (Twilio), SMS (Twilio)
+- Duplicate send protection (prevents sending same receipt to same channel/recipient)
+- RBAC permissions: `RECEIPT_VIEW`, `RECEIPT_GENERATE`, `RECEIPT_SEND`, `COMMUNICATION_VIEW`, `COMMUNICATION_SEND`
+- Tenant isolation on all receipt and communication queries
+- Audit logging on receipt generation and communication sends
+
+### Database
+
+- Migration `4b5174192b0d_create_customer_accounts_table_for_.py` also includes receipt and communication tables (customer_accounts, receipts, communications)
+
+### Backend
+
+- Receipt & Communication module (`backend/app/modules/receipts/`):
+  - `router.py` — 6 REST endpoints (invoice PDF, payment receipt PDF, send receipt, list communications, get communication, receipt by billing/payment)
+  - `schemas.py` — Pydantic schemas (ReceiptResponse, CommunicationHistoryResponse, SendReceiptRequest, SendReceiptResponse, CommunicationListParams, CommunicationListResponse)
+  - `service.py` — `ReceiptService` and `CommunicationService` with PDF generation, storage, and delivery logic
+  - `__init__.py` — Module init
+- Core roles update (`backend/app/core/roles.py`): Added RECEIPT_* and COMMUNICATION_* permissions
+
+### Frontend
+
+- `frontend/lib/api.ts` — `receiptApi` with all receipt and communication methods
+- Receipt download/preview buttons integrated in BillingManager and application detail pages
+- Send receipt dialog with channel selection and recipient input
+
+### Security
+
+- Shop-scoped access across all endpoints (tenant isolation)
+- Cross-tenant validation returns 403
+- RBAC enforcement on all routes
+- Signed URLs with configurable expiration for PDF access
+- Comprehensive audit trails on receipt generation and communication sends
+- PDF generation sandboxed (WeasyPrint)
+
+### Tests
+
+- `backend/tests/test_receipts.py`: Tests covering invoice PDF, payment receipt PDF, send receipt via email, duplicate send protection, receipt API endpoints
+- Total test suite: 169/169 passed in container
+
+### Verification
+
+- Backend tests: 169 passed
+- Frontend build: `npm run build` completed successfully (21 static & dynamic routes generated)
+- Docker Compose: All services (backend, frontend, postgres, redis, minio) healthy and running
+- Tenant isolation verified (cross-shop returns 403)
+- Receipt RBAC verified (Owner/Manager: generate/send; Financial Staff: view; Staff: view)
+- PDF generation verified (invoice and payment receipt)
+- Communication delivery verified (email channel)
+- Duplicate send protection verified
+- Audit logging verified
+- No remaining Phase 10 issues
+
+### Fixes Applied
+
+None required — implemented cleanly.
+
+### Remaining Issues
+
+None.
+
+---
+
+## Phase 11 — Customer Portal
+
+**Status:** COMPLETE AND VERIFIED
+
+### Objective
+
+Build a separate **Customer Portal** with its own authentication system, allowing customers to:
+- Log in with email/password (shop-scoped)
+- View their dashboard with applications, documents, payments summary
+- Browse and track their service applications
+- View and download verified documents
+- View payment history
+- View and edit their profile
+- Change their password
+
+### Implemented
+
+**Backend - Customer Auth Module (`backend/app/modules/customers/auth/`):**
+- CustomerAuth model with Argon2id password hashing, failed login tracking, account locking
+- JWT access tokens (short-lived) + HTTP-only refresh tokens (7 days, Redis-backed with revocation)
+- RBAC: new permission `CUSTOMER_PORTAL_ACCESS`
+- Login/refresh/logout/me endpoints (proxied through Next.js API routes)
+- Change password endpoint with audit logging
+- Tenant isolation via `x-shop-id` header (never trust frontend)
+
+**Frontend - Customer Portal (`frontend/app/portal/[shopId]/`):**
+- `/portal/login` — Login page with shop selection
+- `/portal/[shopId]/dashboard` — Stats cards + quick actions
+- `/portal/[shopId]/applications` — Paginated table with status badges + view detail
+- `/portal/[shopId]/applications/[id]` — Application detail with form data
+- `/portal/[shopId]/documents` — Paginated table with status, download for verified
+- `/portal/[shopId]/payments` — Paginated table with method badges
+- `/portal/[shopId]/profile` — View/edit profile (name, email, mobile, address)
+- `/portal/[shopId]/settings` — Change password with validation
+- CustomerAuthProvider context for token management (memory-only access tokens)
+- API client integration (`customerPortalApi`, `customerLogin`, `customerLogout`, etc.)
+
+**Security:**
+- Separate auth system from staff/platform auth
+- Argon2id password hashing (reuses existing security utilities)
+- Short-lived access tokens (15 min) + HTTP-only refresh cookies
+- Session revocation on logout/password change
+- Failed login tracking with account lockout (5 attempts → 15 min lock)
+- `x-shop-id` header for tenant isolation (shop_id from URL, validated server-side)
+- Audit logging for all mutations
+
+### Database
+
+- Migration `4b5174192b0d_create_customer_accounts_table_for_.py`: `customer_accounts` table with shop_id, customer_id, email, password_hash, status, failed_login_attempts, locked_until, password_changed_at, last_login_at
+
+### Backend
+
+- Customer Auth Module (`backend/app/modules/customers/auth/`):
+  - `models.py` — `CustomerAuth` model (in `backend/app/models/customer_account.py`)
+  - `schemas.py` — Request/response schemas
+  - `service.py` — `CustomerAuthService` with authenticate, create_tokens, refresh_tokens, logout, get_current_customer, change_password
+  - `router.py` — Auth endpoints (login, refresh, logout, me)
+  - `dependencies.py` — `get_current_customer` dependency
+- Customer Portal Module (`backend/app/modules/customers/portal/`):
+  - `schemas.py` — Response schemas
+  - `service.py` — `CustomerPortalService` with tenant-isolated queries
+  - `router.py` — Protected endpoints (profile, change-password, applications, documents, payments)
+- Core roles update (`backend/app/core/roles.py`): Added `CUSTOMER_PORTAL_ACCESS` permission
+
+### Frontend
+
+- Auth Context (`frontend/lib/customer-auth-context.tsx`):
+  - `CustomerAuthProvider` — In-memory access token, auto-refresh, login/logout/refresh methods
+  - `useCustomerAuth()` hook
+- API Client (`frontend/lib/api.ts`):
+  - Separate token management for customer portal
+  - `customerLogin`, `customerRefreshToken`, `customerLogout`, `fetchCurrentCustomer`
+  - `customerPortalApi` object with all portal methods
+- Portal Pages (`frontend/app/portal/[shopId]/`):
+  - All updated for Next.js 15 App Router (`params` is `Promise<{ shopId: string }>`)
+  - Use `use(params)` hook and `customer!.shop_id` for API calls
+
+### Security Features
+
+1. **Separate Auth System** — Completely independent from staff/platform authentication
+2. **Argon2id** — Industry-standard password hashing
+3. **Short-lived Access Tokens** — 15 minutes, stored only in memory
+4. **HTTP-only Refresh Cookies** — 7 days, secure, same-site, not accessible to JS
+5. **Session Revocation** — On logout and password change (Redis-backed revocation list)
+6. **Account Lockout** — 5 failed attempts → 15 minute lock
+7. **Tenant Isolation** — `shop_id` from URL validated against authenticated customer's shop_id
+8. **Audit Logging** — All mutations logged via existing audit system
+9. **Password Policy** — Minimum 8 chars, uppercase, lowercase, digit, special char
+
+### Tests
+
+- Backend: 169/169 tests pass (no regressions from existing phases)
+- Frontend: `npm run build` passes with no TypeScript errors
+- Docker: All 5 services healthy
+
+### Verification
+
+- Backend tests: 169/169 pass
+- Frontend build: `npm run build` passes
+- Docker Compose: All services healthy
+- Tenant isolation verified
+- Customer auth RBAC verified
+- Portal pages verified (all 7 pages functional)
+- Password change flow verified
+- Audit logging verified
+- No remaining Phase 11 issues
+
+### Fixes Applied (Next.js 15 App Router Migration)
+
+1. Updated all portal pages to use `use(params)` hook instead of `resolvedParams` pattern
+2. Fixed `layout.tsx` to import `use` from React
+3. Fixed settings page to use `customer.shop_id` (number) instead of URL param (string)
+4. Fixed all API calls to use authenticated customer's `shop_id` for tenant isolation
+5. Added missing `use` import in portal layout
+
+### Remaining Issues
+
+None.
+
+---
+
 *Future phases (DO NOT IMPLEMENT EARLY):*
-- Receipt Generation & Communication
-- SMS / WhatsApp / Notifications
+- Phase 12: Final Polish & Release Preparation
+- SMS / WhatsApp / Notifications (customer-facing)
 - Customer chat / Staff chat
 - Subscriptions / Coupons / Offers

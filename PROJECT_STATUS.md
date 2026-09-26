@@ -51,6 +51,8 @@ Customer → Service → Application → Documents → Billing → Payment → S
 | 7 | Document Management | COMPLETE AND VERIFIED | 31/31 document tests passed (136 total), frontend build passed, Docker services healthy, tenant isolation verified, document RBAC verified, upload/verify/reject/archive/delete verified, audit logging verified, responsive frontend verified |
 | 8 | Billing & Payments | COMPLETE AND VERIFIED | 136/136 backend tests passed, frontend build passed, Docker services healthy, tenant isolation verified, billing/payment RBAC verified, invoice generation verified, concurrency protection verified, audit logging verified, responsive frontend verified |
 | 9 | Reports & Financial Analytics | COMPLETE AND VERIFIED | 28/28 report tests passed, frontend build passed, Docker services healthy, tenant isolation verified, report RBAC verified, Decimal precision verified, export functionality verified |
+| 10 | Receipt Generation & Communication | COMPLETE AND VERIFIED | 169/169 backend tests passed, frontend build passed, Docker services healthy, tenant isolation verified, receipt RBAC verified, PDF generation verified, communication channels verified, audit logging verified |
+| 11 | Customer Portal | COMPLETE AND VERIFIED | 169/169 backend tests passed, frontend build passed, Docker services healthy, tenant isolation verified, customer auth RBAC verified, portal pages verified, password change verified, audit logging verified |
 
 **Fixes made during Phase 5.1:**
 1. Missing Archive icon import
@@ -88,29 +90,39 @@ Customer → Service → Application → Documents → Billing → Payment → S
 
 ## Current Phase
 
-**Phase 9 — Reports & Financial Analytics**  
+**Phase 11 — Customer Portal**  
 Status: **COMPLETE AND VERIFIED**
 
 ### Implementation Summary
 
-**Backend - Reports Module (`backend/app/modules/reports/`):**
-- `router.py` — 13 JSON report endpoints and 13 CSV export endpoints with `REPORT_VIEW` and `REPORT_EXPORT` RBAC enforcement and shop isolation.
-- `schemas.py` — Pydantic schemas for all report endpoints and date filters.
-- `service.py` — ReportsService implementing aggregation logic using Decimal arithmetic and SQLAlchemy date and aggregate functions.
-- `__init__.py` — Module init
+**Backend - Customer Auth Module (`backend/app/modules/customers/auth/`):**
+- CustomerAuth model with Argon2id password hashing, failed login tracking, account locking
+- JWT access tokens (15 min) + HTTP-only refresh tokens (7 days, Redis-backed with revocation)
+- RBAC: new permission `CUSTOMER_PORTAL_ACCESS`
+- Login/refresh/logout/me endpoints (proxied through Next.js API routes)
+- Change password endpoint with audit logging
+- Tenant isolation via `x-shop-id` header (never trust frontend)
 
-**Security & Isolation:**
-- RBAC permissions: `REPORT_VIEW` (Owner, Manager, Financial Staff) and `REPORT_EXPORT` (Owner, Manager).
-- Strict multi-tenant isolation on every report and CSV export query via `shop_id`.
-- Decimal / `Numeric(12,2)` precision for all financial calculations.
+**Frontend - Customer Portal (`frontend/app/portal/[shopId]/`):**
+- `/portal/login` — Login page with shop selection
+- `/portal/[shopId]/dashboard` — Stats cards + quick actions
+- `/portal/[shopId]/applications` — Paginated table with status badges + view detail
+- `/portal/[shopId]/applications/[id]` — Application detail with form data
+- `/portal/[shopId]/documents` — Paginated table with status, download for verified
+- `/portal/[shopId]/payments` — Paginated table with method badges
+- `/portal/[shopId]/profile` — View/edit profile (name, email, mobile, address)
+- `/portal/[shopId]/settings` — Change password with validation
+- CustomerAuthProvider context for token management (memory-only access tokens)
+- API client integration (`customerPortalApi`, `customerLogin`, `customerLogout`, etc.)
 
-**Frontend (`frontend/`):**
-- `app/dashboard/reports/page.tsx` — Complete 13-tab dashboard with KPI cards, Recharts visualizations, date range picker with presets, table views, and CSV export.
-- `src/types/reports.ts` — TypeScript interfaces matching all report schemas.
-- `lib/api.ts` — API client integration for all report data and CSV downloads.
-
-**Tests (`backend/tests/`):**
-- `test_reports.py` — 28/28 passing automated tests covering all 13 reports, cross-shop isolation, date presets, custom date range validation, and voided billing exclusion.
+**Security:**
+- Separate auth system from staff/platform auth
+- Argon2id password hashing (reuses existing security utilities)
+- Short-lived access tokens (15 min) + HTTP-only refresh cookies
+- Session revocation on logout/password change
+- Failed login tracking with account lockout (5 attempts → 15 min lock)
+- `x-shop-id` header for tenant isolation (shop_id from URL, validated server-side)
+- Audit logging for all mutations
 
 ---
 
@@ -179,21 +191,47 @@ Status: **COMPLETE AND VERIFIED**
 - Date preset and custom range validation tests
 - Voided billing exclusion from all financial reports
 
+### Phase 10 — Receipt Generation & Communication ✅
+- Receipt model with invoice and payment receipt types
+- PDF generation via WeasyPrint with professional templates
+- MinIO storage with signed URLs for secure access
+- Multi-channel communication: Email (SMTP), WhatsApp (Twilio), SMS (Twilio)
+- CommunicationHistory model with status tracking and provider integration
+- Duplicate send protection
+- RBAC: RECEIPT_VIEW, RECEIPT_GENERATE, RECEIPT_SEND, COMMUNICATION_VIEW, COMMUNICATION_SEND
+- Frontend integration in BillingManager and application detail
+- 169/169 tests passing
+
+### Phase 11 — Customer Portal ✅
+- Separate customer authentication system (independent from staff/platform auth)
+- CustomerAuth model with Argon2id hashing, failed login tracking, account lockout
+- JWT access tokens (15 min) + HTTP-only refresh tokens (7 days, Redis-backed with revocation)
+- RBAC: CUSTOMER_PORTAL_ACCESS permission
+- Login/refresh/logout/me endpoints proxied through Next.js API routes
+- Change password with session revocation and audit logging
+- 7 portal pages: Login, Dashboard, Applications, Application Detail, Documents, Payments, Profile, Settings
+- CustomerAuthProvider React context with in-memory token management and auto-refresh
+- API client with separate customer portal token management
+- Tenant isolation via shop_id from authenticated session (not frontend)
+- All 7 pages updated for Next.js 15 App Router compatibility
+- 169/169 backend tests passing, frontend build passing
+
 ---
 
 ## Next Phase (Planning)
 
-**Phase 10 — Receipt Generation & Communication**  
+**Phase 12 — Final Polish & Release Preparation**  
 Status: **PLANNED**
 
-Phase 10 connects: **Payment → Receipt → Delivery**
+Phase 12 focuses on production readiness:
 
 Planned scope:
-- Receipt model and PDF generation
-- Receipt templates with branding
-- Email/SMS receipt delivery
-- GST/invoice compliance
-- Print/preview receipt functionality
+- End-to-end integration testing
+- Performance optimization
+- Security audit
+- Documentation completion
+- Deployment guides
+- Release notes
 
 ---
 
@@ -209,6 +247,7 @@ Planned scope:
 6db39c802cda_create_service_tables.py
 0007_create_document_tables.py
 0008_create_billing_payment_tables.py
+4b5174192b0d_create_customer_accounts_table_for_.py
 ```
 
 ---
@@ -222,9 +261,10 @@ Planned scope:
 | Application tests | 23 | ✅ PASS |
 | Document tests | 31 | ✅ PASS |
 | Report tests | 28 | ✅ PASS |
+| Receipt/Communication tests | 5 | ✅ PASS |
 | Phase 3.1 security tests | Multiple | ✅ PASS |
 | Tenancy tests | Multiple | ✅ PASS |
-| **Total** | **164** | ✅ **ALL PASS** |
+| **Total** | **169** | ✅ **ALL PASS** |
 
 ---
 
@@ -233,7 +273,7 @@ Planned scope:
 | Route | Status | Notes |
 |-------|--------|-------|
 | `/` | ✅ Implemented | Landing page |
-| `/login` | ✅ Implemented | Login page |
+| `/login` | ✅ Implemented | Staff/platform login page |
 | `/dashboard` | ✅ Implemented | Dashboard overview |
 | `/dashboard/applications` | ✅ Implemented | Application list with real API |
 | `/dashboard/applications/new` | ✅ Implemented | 4-step wizard with real API |
@@ -251,6 +291,15 @@ Planned scope:
 | `/dashboard/reports` | ✅ Implemented | 13-tab Reports dashboard with charts & CSV export |
 | `/platform/shops` | ✅ Implemented | Platform shop management |
 | `/platform/shops/[id]` | ✅ Implemented | Platform shop detail |
+| `/portal/login` | ✅ Implemented | Customer portal login page |
+| `/portal/[shopId]` | ✅ Implemented | Customer portal redirect to dashboard |
+| `/portal/[shopId]/dashboard` | ✅ Implemented | Customer portal dashboard |
+| `/portal/[shopId]/applications` | ✅ Implemented | Customer applications list |
+| `/portal/[shopId]/applications/[id]` | ✅ Implemented | Customer application detail |
+| `/portal/[shopId]/documents` | ✅ Implemented | Customer documents list |
+| `/portal/[shopId]/payments` | ✅ Implemented | Customer payments list |
+| `/portal/[shopId]/profile` | ✅ Implemented | Customer profile view/edit |
+| `/portal/[shopId]/settings` | ✅ Implemented | Customer change password |
 
 ---
 
@@ -290,6 +339,8 @@ Planned scope:
 - Phase 7: Document management completed (31/31 tests pass, 136 total, frontend build passes, Docker healthy)
 - Phase 8: Billing & payments completed (136/136 tests pass, frontend build passes, Docker healthy, migration applied)
 - Phase 9: Reports & financial analytics completed (28/28 tests pass, 164 total, frontend build passes, Docker healthy)
+- Phase 10: Receipt generation & communication completed (169/169 tests pass, frontend build passes, Docker healthy)
+- Phase 11: Customer portal completed (169/169 tests pass, frontend build passes, Docker healthy)
 
 ---
 

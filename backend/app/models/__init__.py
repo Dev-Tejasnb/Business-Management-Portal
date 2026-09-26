@@ -35,6 +35,7 @@ from app.models.receipt import (  # noqa: E402,F401
     CommunicationChannel,
     CommunicationStatus,
 )
+from app.models.customer_account import CustomerAccount, CustomerAccountStatus  # noqa: E402,F401
 
 __all__ = [
     "Base",
@@ -61,4 +62,6 @@ __all__ = [
     "PaymentMethod",
     "PaymentStatus",
     "DiscountType",
+    "CustomerAccount",
+    "CustomerAccountStatus",
 ]

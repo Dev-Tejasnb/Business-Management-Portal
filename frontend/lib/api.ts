@@ -1294,3 +1294,266 @@ export const receiptApi = {
     return res.json();
   },
 };
+
+/* =============================================================================
+   Customer Portal Auth API (Phase 11)
+   ============================================================================= */
+
+let customerAccessToken: string | null = null;
+let customerAccessTokenExpiry: number | null = null;
+
+export function setCustomerAccessToken(token: string, expiresIn: number) {
+  customerAccessToken = token;
+  // Set expiry slightly earlier to avoid using an about-to-expire token.
+  customerAccessTokenExpiry = Date.now() + (expiresIn - 30) * 1000;
+}
+
+export function clearCustomerAccessToken() {
+  customerAccessToken = null;
+  customerAccessTokenExpiry = null;
+}
+
+export function getCustomerAccessToken(): string | null {
+  if (!customerAccessToken || !customerAccessTokenExpiry) return null;
+  if (Date.now() >= customerAccessTokenExpiry) return null;
+  return customerAccessToken;
+}
+
+const CUSTOMER_AUTH_PROXY = "/api/customer-auth";
+
+export interface CustomerAuthUser {
+  id: number;
+  shop_id: number;
+  customer_id: number;
+  email: string;
+  status: "active" | "inactive" | "locked";
+  failed_login_attempts: number;
+  locked_until: string | null;
+  password_changed_at: string | null;
+  last_login_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomerLoginResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  customer: CustomerAuthUser;
+}
+
+export async function customerLogin(
+  email: string,
+  password: string,
+  shopId: string
+): Promise<CustomerLoginResponse> {
+  const res = await fetch(`${CUSTOMER_AUTH_PROXY}/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-shop-id": shopId,
+    },
+    body: JSON.stringify({ email, password }),
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, body?.error?.message ?? "Login failed");
+  }
+  const data: CustomerLoginResponse = await res.json();
+  setCustomerAccessToken(data.access_token, data.expires_in);
+  return data;
+}
+
+export async function customerRefreshToken(shopId: string): Promise<CustomerLoginResponse | null> {
+  const res = await fetch(`${CUSTOMER_AUTH_PROXY}/refresh`, {
+    method: "POST",
+    headers: { "x-shop-id": shopId },
+    credentials: "include",
+  });
+  if (!res.ok) return null;
+  const data: CustomerLoginResponse = await res.json();
+  setCustomerAccessToken(data.access_token, data.expires_in);
+  return data;
+}
+
+export async function customerLogout(): Promise<void> {
+  const token = getCustomerAccessToken();
+  await fetch(`${CUSTOMER_AUTH_PROXY}/logout`, {
+    method: "POST",
+    credentials: "include",
+    headers: token
+      ? { Authorization: `Bearer ${token}` }
+      : undefined,
+  });
+  clearCustomerAccessToken();
+}
+
+export async function fetchCurrentCustomer(shopId: string): Promise<CustomerAuthUser> {
+  const token = getCustomerAccessToken();
+  if (!token) throw new ApiError(401, "Not authenticated");
+  const res = await fetch(`${CUSTOMER_AUTH_PROXY}/me`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "x-shop-id": shopId,
+    },
+    credentials: "include",
+  });
+  if (!res.ok) throw new ApiError(res.status, "Failed to load customer");
+  return res.json();
+}
+
+// ── Customer Portal API (shop-scoped, customer-scoped) ───────────────────────────
+
+export interface CustomerApplicationResponse {
+  id: number;
+  shop_id: number;
+  customer_id: number;
+  service_id: number;
+  status: string;
+  application_number: string;
+  form_data: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+  service_name?: string;
+  service_slug?: string;
+}
+
+export interface CustomerApplicationListResponse {
+  items: CustomerApplicationResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface CustomerDocumentResponse {
+  id: number;
+  shop_id: number;
+  customer_id: number;
+  application_id?: number;
+  service_field_id?: number;
+  file_name: string;
+  file_size: number;
+  mime_type: string;
+  storage_key: string;
+  status: string;
+  rejection_reason?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomerDocumentListResponse {
+  items: CustomerDocumentResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface CustomerPaymentResponse {
+  id: number;
+  shop_id: number;
+  billing_id: number;
+  recorded_by: number;
+  paid_at: string;
+  created_at: string;
+  updated_at?: string;
+  amount: number;
+  payment_method: string;
+  reference_number?: string;
+  notes?: string;
+  recorder_name?: string;
+}
+
+export interface CustomerPaymentListResponse {
+  items: CustomerPaymentResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface CustomerProfileResponse {
+  id: number;
+  shop_id: number;
+  name: string;
+  mobile: string;
+  email?: string;
+  address?: string;
+  notes?: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const customerPortalApi = {
+  /** Get customer's applications */
+  async listApplications(shopId: number, params: { page?: number; page_size?: number; status?: string } = {}): Promise<CustomerApplicationListResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.page) searchParams.set("page", String(params.page));
+    if (params.page_size) searchParams.set("page_size", String(params.page_size));
+    if (params.status) searchParams.set("status", params.status);
+    const res = await apiFetch(`/customer-portal/${shopId}/applications?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to list applications");
+    return res.json();
+  },
+
+  /** Get application details */
+  async getApplication(shopId: number, applicationId: number): Promise<CustomerApplicationResponse> {
+    const res = await apiFetch(`/customer-portal/${shopId}/applications/${applicationId}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to fetch application");
+    return res.json();
+  },
+
+  /** Get customer's documents */
+  async listDocuments(shopId: number, params: { page?: number; page_size?: number; status?: string } = {}): Promise<CustomerDocumentListResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.page) searchParams.set("page", String(params.page));
+    if (params.page_size) searchParams.set("page_size", String(params.page_size));
+    if (params.status) searchParams.set("status", params.status);
+    const res = await apiFetch(`/customer-portal/${shopId}/documents?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to list documents");
+    return res.json();
+  },
+
+  /** Get customer's payments */
+  async listPayments(shopId: number, params: { page?: number; page_size?: number } = {}): Promise<CustomerPaymentListResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.page) searchParams.set("page", String(params.page));
+    if (params.page_size) searchParams.set("page_size", String(params.page_size));
+    const res = await apiFetch(`/customer-portal/${shopId}/payments?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to list payments");
+    return res.json();
+  },
+
+  /** Get customer profile */
+  async getProfile(shopId: number): Promise<CustomerProfileResponse> {
+    const res = await apiFetch(`/customer-portal/${shopId}/profile`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to fetch profile");
+    return res.json();
+  },
+
+  /** Update customer profile */
+  async updateProfile(shopId: number, payload: Partial<CustomerProfileResponse>): Promise<CustomerProfileResponse> {
+    const res = await apiFetch(`/customer-portal/${shopId}/profile`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to update profile");
+    return res.json();
+  },
+
+  /** Change password */
+  async changePassword(shopId: number, payload: { current_password: string; new_password: string }): Promise<{ message: string }> {
+    const res = await apiFetch(`/customer-portal/${shopId}/change-password`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, body?.error?.message ?? "Failed to change password");
+    }
+    return res.json();
+  },
+};
