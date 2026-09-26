@@ -1,0 +1,1424 @@
+You are continuing development of the existing Business Management Portal SaaS application.
+
+IMPORTANT:
+This is PHASE 10 ONLY.
+
+Do NOT implement Phase 11 or any later phase.
+Do NOT redesign or re-architect already completed phases unless absolutely required for Phase 10.
+Do NOT replace working functionality.
+Do NOT create duplicate models, services, APIs, components, migrations, or utilities that already exist.
+
+============================================================
+PROJECT
+============================================================
+
+Product:
+Business Management Portal
+
+Tagline:
+All-in-One Web Application for Managing Your Business
+
+Feature line:
+Customers • Applications • Services • Documents • Payments • Staff • Reports
+
+Target businesses:
+- CSC Centers
+- GramaOne Centers
+- Online Service Centers
+- Xerox & Printing Shops
+- Cyber Cafes
+- Digital Service Centers
+- E-Governance Service Centers
+
+Current architecture:
+
+Frontend:
+- Next.js 15
+- React 19
+- TypeScript
+- Tailwind CSS
+- Existing UI component system
+- Recharts where already used
+
+Backend:
+- FastAPI
+- Python
+- SQLAlchemy 2.x
+- Alembic
+
+Database:
+- PostgreSQL
+
+Infrastructure:
+- Redis
+- MinIO / S3-compatible object storage
+- Docker Compose
+
+Authentication:
+- JWT access token
+- Redis-backed refresh/session system
+- HTTP-only secure cookies where already implemented
+- Argon2id password hashing
+
+Architecture:
+- Modular monolith
+- Multi-tenant SaaS
+- Shared PostgreSQL database
+- Every tenant-owned record must be scoped using shop_id
+- Backend determines tenant from authenticated session/context
+- NEVER trust shop_id supplied by the frontend
+
+Security:
+- RBAC
+- Tenant isolation
+- Audit logging
+- Private document storage
+- Signed URLs
+- Secure sessions
+- Rate limiting where already implemented
+- Input validation
+- File validation
+- No secrets committed to source control
+
+============================================================
+COMPLETED PHASES
+============================================================
+
+The following phases are already implemented and verified:
+
+Phase 3:
+Security / RBAC / Multi-tenancy
+
+Phase 4:
+Service Management
+
+Phase 5:
+Customer Management
+
+Phase 6:
+Application Management Core
+
+Phase 7:
+Document Management
+
+Phase 8:
+Billing & Payments
+
+Phase 9:
+Reports & Financial Analytics
+
+Current backend regression baseline:
+164/164 tests passing.
+
+Do NOT break existing functionality.
+
+Before writing code, inspect the actual repository and documentation.
+
+============================================================
+MANDATORY FIRST STEP — INSPECT EXISTING PROJECT
+============================================================
+
+Before making any changes:
+
+1. Inspect:
+   - PROJECT_STATUS.md
+   - DEVELOPMENT_RULES.md
+   - PHASE_HISTORY.md
+   - CURRENT_PHASE.md
+
+2. Inspect the existing backend structure.
+
+3. Inspect:
+   - Phase 8 billing/payment implementation
+   - Billing models
+   - Payment models
+   - Billing schemas
+   - Billing services
+   - Billing router
+   - Existing RBAC/permissions
+   - Audit service
+   - Storage service
+   - MinIO integration
+   - Redis integration
+   - Existing PDF/report generation utilities
+   - Existing frontend billing components
+   - Existing application detail page
+   - Existing API client
+   - Existing authentication/session system
+
+4. Search the repository before creating anything.
+
+5. Reuse existing utilities and architecture wherever possible.
+
+6. Do NOT assume something does not exist until you search for it.
+
+7. Read existing tests before implementing related functionality.
+
+============================================================
+PHASE 10 OBJECTIVE
+============================================================
+
+Implement a production-quality:
+
+RECEIPT GENERATION & COMMUNICATION SYSTEM
+
+The system must support:
+
+1. Professional Invoice PDF generation
+2. Professional Payment Receipt PDF generation
+3. Secure PDF access/download
+4. Historical financial integrity
+5. Shop branding
+6. Receipt/invoice numbering
+7. Communication abstraction
+8. Email receipt delivery
+9. Communication history
+10. Mock communication provider for development/testing
+11. Optional WhatsApp/SMS provider architecture
+12. Duplicate-send protection
+13. RBAC
+14. Tenant isolation
+15. Audit logging
+16. Frontend integration
+17. Complete automated testing
+
+============================================================
+IMPORTANT FINANCIAL RULE
+============================================================
+
+Receipt generation MUST NEVER modify financial records.
+
+Generating an invoice or receipt must NOT:
+
+- change invoice totals
+- change service price
+- change discount
+- change payment amount
+- change payment status
+- change billing status
+- change historical billing items
+- change payment records
+- silently recalculate historical prices
+
+Phase 8 financial data is the source of truth.
+
+Receipt generation is READ-ONLY with respect to financial records.
+
+============================================================
+1. INVOICE PDF
+============================================================
+
+Create a professional invoice PDF based on the existing Phase 8 Billing data.
+
+The invoice must contain, where available:
+
+SHOP INFORMATION
+- Shop name
+- Shop logo
+- Shop address
+- Shop phone
+- Shop email
+- Other configured branding information
+
+INVOICE INFORMATION
+- Invoice number
+- Invoice date
+- Application number
+- Application date
+- Customer name
+- Customer mobile
+- Customer email if available
+
+SERVICE INFORMATION
+- Service name
+- Service description if available
+- Application reference
+
+LINE ITEMS
+- Item description
+- Quantity
+- Unit price
+- Total
+
+FINANCIAL SUMMARY
+- Service amount
+- Additional/non-service charges
+- Discount
+- Discount type
+- Discount reason where appropriate
+- Final amount
+- Amount paid
+- Balance due
+- Payment status
+
+FOOTER
+- Appropriate terms/notes if configured
+- Professional footer
+- Developer credit only if the existing branding/settings architecture supports it
+
+IMPORTANT:
+
+The invoice must use the historical billing values stored by Phase 8.
+
+Do NOT calculate the historical service price again from the current Service table.
+
+============================================================
+2. PAYMENT RECEIPT PDF
+============================================================
+
+Create a separate Payment Receipt PDF.
+
+A payment receipt is NOT the same thing as an invoice.
+
+The receipt must represent a specific payment transaction.
+
+Include:
+
+- Shop branding
+- Receipt number
+- Receipt date/time
+- Invoice number
+- Application number
+- Customer name
+- Customer mobile
+- Service
+- Payment amount
+- Payment method
+- Payment reference if applicable
+- Total invoice amount
+- Total amount paid after this payment
+- Remaining balance
+- Payment status
+- Notes if applicable
+
+Example:
+
+Invoice Total:
+₹5,000
+
+Previous Paid:
+₹2,000
+
+Current Payment:
+₹1,500
+
+Total Paid:
+₹3,500
+
+Balance:
+₹1,500
+
+The receipt must clearly show that it represents the current payment.
+
+============================================================
+3. RECEIPT NUMBERING
+============================================================
+
+Payment receipts require server-generated receipt numbers.
+
+Receipt numbers must be:
+
+- generated on the backend
+- unique
+- concurrency-safe
+- tenant-aware where appropriate
+- never generated by the frontend
+- never based solely on frontend timestamps
+- protected against duplicate numbers
+
+Use PostgreSQL-safe concurrency mechanisms.
+
+If a new database model is required, create it properly.
+
+Do not create receipt numbers using an unsafe:
+
+MAX(receipt_number) + 1
+
+pattern without concurrency protection.
+
+============================================================
+4. RECEIPT / DOCUMENT MODEL
+============================================================
+
+Inspect the existing billing and storage architecture first.
+
+If the existing Billing/Payment models are sufficient, do NOT unnecessarily create duplicate financial models.
+
+If a dedicated Receipt model is required, it should contain appropriate fields such as:
+
+- id
+- shop_id
+- payment_id
+- receipt_number
+- generated_at
+- generated_by
+- storage_key if persisted
+- status if required
+- created_at
+- updated_at
+
+Follow the existing project's naming conventions.
+
+Do not blindly copy this schema if an existing structure already solves the requirement.
+
+============================================================
+5. PDF GENERATION
+============================================================
+
+Use the project's existing PDF/report generation approach if one exists.
+
+Do NOT introduce another PDF framework unnecessarily.
+
+PDFs must be:
+
+- professional
+- printable
+- readable
+- properly aligned
+- mobile-download friendly
+- A4-friendly where appropriate
+- consistent with the Business Management Portal branding
+
+Use proper sections:
+
+Header
+Shop information
+Document information
+Customer information
+Service/application information
+Financial summary
+Payment information
+Footer
+
+Use proper currency formatting.
+
+Do not use floating-point arithmetic for financial calculations.
+
+Use Decimal/Numeric values already established in Phase 8.
+
+============================================================
+6. SHOP BRANDING
+============================================================
+
+Receipts and invoices should use shop branding where the existing shop/settings architecture supports it.
+
+Possible branding:
+
+- Shop name
+- Logo
+- Address
+- Phone
+- Email
+- Website
+- GST/tax information if the existing system supports it
+
+Do NOT invent tax/GST fields if they are not part of the existing application.
+
+If branding configuration does not yet exist, implement only the minimum required structure for Phase 10.
+
+Do not expand into a full Shop Settings phase.
+
+============================================================
+7. SECURE PDF STORAGE / ACCESS
+============================================================
+
+Inspect the existing MinIO/S3 StorageService.
+
+Reuse it.
+
+If PDFs are persisted:
+
+Use private storage.
+
+Do NOT expose public bucket URLs.
+
+Use:
+
+- signed URLs
+- short expiration
+- tenant validation
+- authorization checks
+
+OR stream the PDF securely through the backend.
+
+A user from Shop A must NEVER be able to access a receipt belonging to Shop B.
+
+Protect against:
+
+- IDOR
+- direct object key guessing
+- cross-tenant access
+- unauthorized download
+
+============================================================
+8. API ENDPOINTS
+============================================================
+
+Follow the existing API/router conventions.
+
+Implement appropriate endpoints such as:
+
+GET
+/api/.../billing/{billing_id}/invoice
+
+Generate/view invoice PDF.
+
+GET
+/api/.../payments/{payment_id}/receipt
+
+Generate/view payment receipt PDF.
+
+If the architecture requires POST for generation, use POST appropriately.
+
+For example:
+
+POST
+/api/.../payments/{payment_id}/receipt
+
+The exact routes must follow the existing project's conventions.
+
+Do NOT blindly create duplicate endpoints.
+
+Support:
+
+- authorization
+- tenant isolation
+- audit logging
+- proper HTTP errors
+- correct Content-Type
+- Content-Disposition
+- secure access
+
+PDF response should use:
+
+application/pdf
+
+============================================================
+9. PDF DOWNLOAD
+============================================================
+
+Support:
+
+- View
+- Download
+- Print through browser PDF viewer
+
+Use correct headers.
+
+Example concept:
+
+Content-Type: application/pdf
+
+Content-Disposition:
+inline; filename="invoice-XXXX.pdf"
+
+or
+
+attachment; filename="receipt-XXXX.pdf"
+
+depending on the endpoint/use case.
+
+Do not expose internal storage paths.
+
+============================================================
+10. RBAC
+============================================================
+
+Use the existing RBAC architecture.
+
+If appropriate, introduce:
+
+RECEIPT_VIEW
+RECEIPT_GENERATE
+RECEIPT_SEND
+
+But first inspect existing permissions.
+
+Do NOT create unnecessary duplicate permissions.
+
+Ensure existing billing/payment permissions continue to work correctly.
+
+Potential access:
+
+Shop Owner:
+- View
+- Generate
+- Send
+
+Shop Manager:
+- View
+- Generate
+- Send
+
+Financial Staff:
+- View
+- Generate
+- Send if permitted by existing permission model
+
+Staff:
+- Only if explicitly granted
+
+Platform-level users:
+- Follow existing platform/shop access rules.
+
+Do not bypass RBAC.
+
+============================================================
+11. AUDIT LOGGING
+============================================================
+
+Use the existing AuditService.
+
+Audit important actions such as:
+
+- Invoice generated
+- Payment receipt generated
+- Receipt sent
+- Receipt send failed
+- Receipt downloaded if existing audit policy supports it
+
+Audit should include:
+
+- actor
+- actor role
+- shop_id
+- action
+- module
+- entity type
+- entity id
+- metadata
+- timestamp
+- IP/user agent where existing infrastructure supports it
+
+Do NOT modify existing financial audit history.
+
+============================================================
+12. COMMUNICATION ARCHITECTURE
+============================================================
+
+Create a clean communication abstraction.
+
+Recommended architecture:
+
+CommunicationService
+    ├── EmailProvider
+    ├── WhatsAppProvider
+    └── SMSProvider
+
+Do NOT put email/WhatsApp/SMS logic directly inside BillingService or PaymentService.
+
+Billing/payment code should request communication through the communication layer.
+
+Example concept:
+
+CommunicationService.send_receipt(...)
+
+Provider-specific implementation should happen below the abstraction.
+
+============================================================
+13. EMAIL PROVIDER
+============================================================
+
+Implement an email provider abstraction.
+
+Support a development/mock provider.
+
+For example:
+
+MockEmailProvider
+
+It should allow tests without real SMTP/API credentials.
+
+If the project already has an email provider abstraction, reuse it.
+
+Do NOT hard-code:
+
+- SMTP passwords
+- API keys
+- tokens
+- email credentials
+
+Use environment variables/secrets.
+
+============================================================
+14. EMAIL RECEIPT
+============================================================
+
+Allow authorized staff to send:
+
+- Invoice
+- Payment Receipt
+
+through email.
+
+Email should contain:
+
+Subject:
+Payment Receipt / Invoice from {Shop Name}
+
+Body:
+
+Professional short message.
+
+Example structure:
+
+Hello {Customer Name},
+
+Please find your payment receipt for:
+
+Service: {Service Name}
+Application: {Application Number}
+Receipt: {Receipt Number}
+Amount Paid: ₹X
+
+Thank you for choosing {Shop Name}.
+
+Regards,
+{Shop Name}
+
+Attach the PDF where appropriate.
+
+Do not send marketing/promotional messages.
+
+This phase is transactional communication only.
+
+============================================================
+15. WHATSAPP / SMS ARCHITECTURE
+============================================================
+
+Create provider interfaces/abstractions where appropriate.
+
+Do NOT integrate unofficial WhatsApp Web automation.
+
+Do NOT use:
+
+- WhatsApp Web scraping
+- unofficial automation
+- browser automation for WhatsApp
+- session-cookie automation
+
+If implemented later, use official APIs/providers.
+
+For Phase 10:
+
+A mock provider or provider interface is acceptable if real credentials are unavailable.
+
+Do not block the entire phase because real WhatsApp/SMS credentials are unavailable.
+
+============================================================
+16. COMMUNICATION HISTORY
+============================================================
+
+Create communication history if it does not already exist.
+
+Possible statuses:
+
+PENDING
+QUEUED
+SENT
+FAILED
+
+Possible channels:
+
+EMAIL
+WHATSAPP
+SMS
+
+Store appropriate metadata:
+
+- id
+- shop_id
+- customer_id
+- application_id
+- payment_id
+- billing_id
+- channel
+- recipient
+- subject if email
+- status
+- provider
+- provider_message_id if available
+- error_message
+- sent_at
+- created_at
+
+Do not duplicate fields unnecessarily if an existing notification/communication model already exists.
+
+============================================================
+17. DUPLICATE SEND PROTECTION
+============================================================
+
+Prevent accidental duplicate communication.
+
+Example:
+
+A user double-clicks:
+
+"Send Receipt"
+
+The backend must not unintentionally send the same receipt twice.
+
+Use appropriate:
+
+- idempotency
+- unique constraints
+- request identifiers
+- communication state
+- transaction handling
+
+Do not rely only on frontend button disabling.
+
+============================================================
+18. ASYNC COMMUNICATION
+============================================================
+
+Inspect the existing Redis/job architecture.
+
+If async jobs already exist, reuse them.
+
+Email/WhatsApp/SMS sending should ideally not block the main HTTP request when the architecture supports background jobs.
+
+Example:
+
+User clicks:
+Send Receipt
+
+Backend:
+- validates permissions
+- creates communication record
+- queues job
+
+Worker:
+- generates/sends communication
+- updates status
+
+However:
+
+Do not introduce a completely new job system if the project already has one.
+
+Keep the implementation consistent with the current architecture.
+
+============================================================
+19. FRONTEND INTEGRATION
+============================================================
+
+Integrate Phase 10 into existing UI.
+
+Do NOT create a separate unrelated design system.
+
+Update the existing:
+
+Application Details
+Billing section
+Payment section
+
+Add actions such as:
+
+- View Invoice
+- Download Invoice
+- View Receipt
+- Download Receipt
+- Send Invoice
+- Send Receipt
+
+Use proper permission-based visibility.
+
+If the user lacks permission, the UI should not expose actions unnecessarily.
+
+Backend authorization remains mandatory regardless of frontend visibility.
+
+============================================================
+20. PAYMENT HISTORY UI
+============================================================
+
+On the application/billing/payment page, show:
+
+Payment Date
+Payment Amount
+Payment Method
+Reference
+Payment Status
+Receipt Number
+Actions
+
+Example:
+
+₹1,500
+UPI
+UPI123456
+Paid
+REC-000123
+
+Actions:
+[View Receipt]
+[Download]
+[Send]
+
+Support multiple payments.
+
+Each payment must have its own receipt.
+
+============================================================
+21. INVOICE UI
+============================================================
+
+Billing section should show:
+
+Invoice Number
+Invoice Date
+Total
+Paid
+Balance
+Payment Status
+
+Actions:
+
+[View Invoice]
+[Download Invoice]
+
+Do not allow the frontend to directly modify historical invoice values through the receipt-generation UI.
+
+============================================================
+22. CUSTOMER PRIVACY
+============================================================
+
+Receipts contain personal/customer information.
+
+Therefore:
+
+- require authorization
+- enforce shop isolation
+- secure downloads
+- do not expose documents publicly
+- do not log sensitive information unnecessarily
+- do not expose passwords/tokens
+- do not put private information in URLs unnecessarily
+
+============================================================
+23. TENANT ISOLATION
+============================================================
+
+This is mandatory.
+
+Every Phase 10 query must enforce shop isolation.
+
+Examples:
+
+Shop A:
+Payment A
+
+Shop B:
+Payment B
+
+A Shop A user must NOT be able to:
+
+- generate Shop B invoice
+- generate Shop B receipt
+- download Shop B receipt
+- send Shop B receipt
+- view Shop B communication history
+- guess Shop B payment IDs
+- guess Shop B storage keys
+
+Test this explicitly.
+
+Never rely on frontend filtering.
+
+============================================================
+24. DATABASE MIGRATION
+============================================================
+
+If database changes are required:
+
+Create the next Alembic migration after the current head.
+
+Current migration history must be inspected first.
+
+Do NOT rename/rewrite old migrations unnecessarily.
+
+Do NOT modify completed migrations just to make Phase 10 work.
+
+Migration must be:
+
+- reversible where appropriate
+- safe
+- tested
+- compatible with PostgreSQL
+
+============================================================
+25. TESTING
+============================================================
+
+Create comprehensive Phase 10 tests.
+
+At minimum test:
+
+PDF generation
+- Invoice PDF generated
+- Payment receipt PDF generated
+- PDF content
+- Correct invoice number
+- Correct receipt number
+- Correct customer
+- Correct application
+- Correct historical price
+- Correct discount
+- Correct payment amount
+- Correct balance
+
+Receipt numbering
+- uniqueness
+- concurrency
+- duplicate prevention
+
+RBAC
+- authorized user can generate
+- unauthorized user denied
+- unauthorized user cannot download
+- unauthorized user cannot send
+
+Tenant isolation
+- Shop A cannot access Shop B invoice
+- Shop A cannot access Shop B payment receipt
+- Shop A cannot access Shop B communication history
+- Shop A cannot use Shop B storage key
+
+Communication
+- mock email provider
+- successful send
+- failed send
+- communication history
+- duplicate-send protection
+- correct recipient
+- correct attachment
+
+Audit
+- invoice generation
+- receipt generation
+- sending
+- failures where applicable
+
+Storage
+- private storage
+- signed URL/secure access
+- no public access
+
+Regression:
+Run the complete existing backend test suite.
+
+Existing tests must continue passing.
+
+============================================================
+26. PDF TESTING
+============================================================
+
+Do not only test HTTP status codes.
+
+Actually verify generated PDF output.
+
+At minimum verify:
+
+- response content type
+- PDF signature/content
+- expected invoice number
+- expected receipt number
+- customer information
+- payment amount
+- total
+- balance
+
+Use an appropriate PDF text extraction/testing method already compatible with the project.
+
+Do not introduce unnecessary dependencies if an existing solution exists.
+
+============================================================
+27. SECURITY TESTING
+============================================================
+
+Explicitly test:
+
+- IDOR
+- cross-tenant access
+- unauthorized PDF download
+- unauthorized receipt generation
+- unauthorized send
+- invalid payment ID
+- invalid billing ID
+- archived/inactive shop behavior according to existing rules
+- malformed input
+- duplicate receipt generation
+- duplicate communication
+- storage key traversal attempts
+- unsafe filenames if generated files are stored
+
+============================================================
+28. FRONTEND TESTING / BUILD
+============================================================
+
+After implementation:
+
+Run:
+
+npm run build
+
+or the project's existing frontend build command.
+
+Fix all TypeScript/build errors.
+
+Do not leave:
+
+- unused imports
+- broken routes
+- invalid API types
+- missing components
+- hydration errors
+- incorrect permission checks
+
+Ensure responsive UI:
+
+Desktop
+Tablet
+Mobile
+
+============================================================
+29. DOCKER VERIFICATION
+============================================================
+
+Use the existing Docker Compose setup.
+
+Verify:
+
+- PostgreSQL healthy
+- Redis healthy
+- MinIO healthy
+- Backend healthy
+- Frontend healthy
+
+Run migrations.
+
+Run backend tests inside the project environment/container as appropriate.
+
+Do not claim Docker verification unless it actually succeeds.
+
+============================================================
+30. ENVIRONMENT VARIABLES
+============================================================
+
+If new environment variables are needed:
+
+Add them to:
+
+.env.example
+
+Do NOT add real secrets.
+
+Examples only:
+
+EMAIL_PROVIDER=
+SMTP_HOST=
+SMTP_PORT=
+SMTP_USERNAME=
+SMTP_PASSWORD=
+
+Use placeholders.
+
+Do NOT commit actual credentials.
+
+============================================================
+31. DOCUMENTATION
+============================================================
+
+Update:
+
+PROJECT_STATUS.md
+DEVELOPMENT_RULES.md if necessary
+PHASE_HISTORY.md
+CURRENT_PHASE.md
+
+Document:
+
+- what was implemented
+- new models
+- migrations
+- APIs
+- permissions
+- PDF generation
+- communication architecture
+- environment variables
+- tests
+- verification results
+- known limitations
+
+Do not falsely claim anything that was not tested.
+
+============================================================
+32. GIT SAFETY
+============================================================
+
+Before finishing:
+
+Run:
+
+git status
+
+Review:
+
+git diff
+
+Check for:
+
+- accidental secrets
+- .env files
+- generated credentials
+- debug code
+- temporary files
+- node_modules
+- Python cache
+- generated PDFs
+- unwanted files
+
+Do not commit secrets.
+
+If creating a commit is part of the existing workflow, use a clear message such as:
+
+Phase 10: Receipt Generation & Communication - Complete Implementation
+
+============================================================
+33. CODE QUALITY
+============================================================
+
+Follow existing project conventions.
+
+Do not:
+
+- rewrite working modules
+- duplicate utilities
+- duplicate models
+- duplicate API clients
+- bypass RBAC
+- bypass tenant isolation
+- hard-code financial values
+- use floating point for money
+- expose MinIO publicly
+- hard-code credentials
+- create unofficial WhatsApp automation
+- modify completed migrations unnecessarily
+- introduce unnecessary microservices
+- create unnecessary infrastructure
+
+Keep the implementation modular.
+
+Recommended separation:
+
+Billing/Payment
+      ↓
+Receipt Service
+      ↓
+PDF Service
+      ↓
+Storage Service
+
+and
+
+Receipt/Payment
+      ↓
+Communication Service
+      ├── Email Provider
+      ├── WhatsApp Provider
+      └── SMS Provider
+
+============================================================
+34. IMPLEMENTATION ORDER
+============================================================
+
+Follow this order:
+
+STEP 1
+Inspect documentation and existing source.
+
+STEP 2
+Inspect Phase 8 billing/payment implementation.
+
+STEP 3
+Inspect existing PDF/storage infrastructure.
+
+STEP 4
+Inspect existing RBAC and audit architecture.
+
+STEP 5
+Design the smallest Phase 10-compatible extension.
+
+STEP 6
+Implement database model/migration only if required.
+
+STEP 7
+Implement receipt/invoice service.
+
+STEP 8
+Implement PDF generation.
+
+STEP 9
+Implement secure PDF access/storage.
+
+STEP 10
+Implement communication abstraction.
+
+STEP 11
+Implement mock email provider.
+
+STEP 12
+Implement communication history.
+
+STEP 13
+Implement duplicate-send protection.
+
+STEP 14
+Implement APIs.
+
+STEP 15
+Implement RBAC.
+
+STEP 16
+Implement audit logging.
+
+STEP 17
+Integrate frontend.
+
+STEP 18
+Write Phase 10 tests.
+
+STEP 19
+Run Phase 10 tests.
+
+STEP 20
+Run complete backend regression suite.
+
+STEP 21
+Run frontend build.
+
+STEP 22
+Run Docker verification.
+
+STEP 23
+Update documentation.
+
+STEP 24
+Review git diff/status.
+
+============================================================
+35. IMPORTANT SCOPE LIMIT
+============================================================
+
+ONLY implement Phase 10.
+
+Do NOT implement:
+
+- Customer Portal
+- Support/Ticket System
+- Advanced Staff Management
+- Full Shop Settings
+- SaaS Subscription Management
+- Coupons
+- Promotions
+- Advanced Search
+- Final UI overhaul
+- Production deployment
+
+Those belong to later phases.
+
+If something from a future phase appears necessary, implement only the minimum interface/abstraction required for Phase 10 and document it as future work.
+
+============================================================
+36. FINAL VERIFICATION REQUIREMENTS
+============================================================
+
+Before declaring Phase 10 complete, verify:
+
+[ ] Existing documentation inspected
+[ ] Existing Phase 8 billing code inspected
+[ ] Existing storage system reused
+[ ] Existing RBAC reused
+[ ] Existing audit system reused
+[ ] Invoice PDF works
+[ ] Payment Receipt PDF works
+[ ] Historical financial values preserved
+[ ] Receipt numbering concurrency-safe
+[ ] Multiple payment receipts work
+[ ] Secure PDF access works
+[ ] Tenant isolation verified
+[ ] RBAC verified
+[ ] Audit logging verified
+[ ] Communication abstraction implemented
+[ ] Mock email provider works
+[ ] Communication history works
+[ ] Duplicate-send protection works
+[ ] Frontend integration works
+[ ] Mobile UI checked
+[ ] Backend Phase 10 tests pass
+[ ] Full backend regression tests pass
+[ ] Frontend build passes
+[ ] Docker services healthy
+[ ] Migration applied successfully
+[ ] No secrets committed
+[ ] Documentation updated
+[ ] git status reviewed
+[ ] git diff reviewed
+
+============================================================
+37. FINAL REPORT
+============================================================
+
+At the end, provide a concise implementation report containing:
+
+1. Phase 10 status:
+   COMPLETE / INCOMPLETE
+
+2. Files created
+
+3. Files modified
+
+4. Database migration created
+
+5. New models
+
+6. New APIs
+
+7. New permissions
+
+8. PDF generation implementation
+
+9. Communication implementation
+
+10. Frontend changes
+
+11. Tests added
+
+12. Test results
+
+13. Full regression result
+
+14. Frontend build result
+
+15. Docker verification result
+
+16. Any known limitations
+
+17. Any future work intentionally left for later phases
+
+IMPORTANT:
+
+Do not say "complete" unless the implementation and verification actually succeeded.
+
+If something fails, clearly report the failure and do not hide it.
+
+============================================================
+STOP CONDITION
+============================================================
+
+After Phase 10 is implemented, tested, documented, and verified:
+
+STOP.
+
+Do not automatically continue to Phase 11.
+
+Wait for further instructions.

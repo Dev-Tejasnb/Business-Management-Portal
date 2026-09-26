@@ -1,0 +1,372 @@
+"""Centralized roles and permission foundation.
+
+This is the single source of truth for platform and shop roles, permission
+constants, and the role→permission mapping. Modules must reference these
+constants/enums rather than using arbitrary strings, and must enforce access via
+the RBAC dependencies (see ``app.modules.auth.dependencies``) instead of
+scattering role checks through route handlers.
+
+Platform roles (platform scope):
+    - Platform Owner: full platform access, shop management, manager assignment
+    - Platform Admin: platform administration, shop management
+    - Platform Manager: manage assigned shops only
+    - Platform Financial Manager: financial review and auditing
+    - Platform Support: user and shop support lookup
+
+Shop roles (shop/tenant scope):
+    - Shop Owner: full control over shop, staff management, primary ownership
+    - Shop Manager: operational shop management (view staff, manage business operations)
+    - Staff / Service Staff: front-line service operations
+    - Financial Staff: billing and payment operations
+"""
+
+from __future__ import annotations
+
+from enum import Enum
+
+
+class PlatformRole(str, Enum):
+    """Platform-scope roles."""
+
+    OWNER = "platform_owner"
+    ADMIN = "platform_admin"
+    MANAGER = "platform_manager"
+    FINANCIAL_MANAGER = "platform_financial_manager"
+    SUPPORT = "platform_support"
+
+
+class ShopRole(str, Enum):
+    """Shop/tenant-scope roles."""
+
+    OWNER = "shop_owner"
+    MANAGER = "shop_manager"
+    STAFF = "staff"
+    FINANCIAL_STAFF = "financial_staff"
+
+
+# ---------------------------------------------------------------------------
+# Platform-scope & Shop-lifecycle permissions
+# ---------------------------------------------------------------------------
+SHOP_CREATE = "SHOP_CREATE"          # create a shop (platform)
+SHOP_VIEW = "SHOP_VIEW"              # view a shop (platform or as shop member)
+SHOP_UPDATE = "SHOP_UPDATE"          # update basic shop info (platform or shop owner)
+SHOP_ACTIVATE = "SHOP_ACTIVATE"      # activate a shop (platform)
+SHOP_DEACTIVATE = "SHOP_DEACTIVATE"  # deactivate / suspend a shop (platform)
+SHOP_ASSIGN_MANAGER = "SHOP_ASSIGN_MANAGER"  # assign platform manager to a shop (platform owner)
+
+USER_VIEW = "USER_VIEW"              # view platform users (platform)
+USER_MANAGE = "USER_MANAGE"          # create/update/deactivate platform users (platform)
+
+MEMBERSHIP_VIEW = "MEMBERSHIP_VIEW"  # view shop memberships
+MEMBERSHIP_MANAGE = "MEMBERSHIP_MANAGE"  # create/update shop memberships
+
+AUDIT_VIEW = "AUDIT_VIEW"            # read audit logs (platform)
+
+# ---------------------------------------------------------------------------
+# Shop-scope Staff permissions
+# ---------------------------------------------------------------------------
+STAFF_VIEW = "STAFF_VIEW"            # list and view staff in shop
+STAFF_CREATE = "STAFF_CREATE"        # add staff to shop
+STAFF_UPDATE = "STAFF_UPDATE"        # update staff basic info in shop
+STAFF_ROLE_UPDATE = "STAFF_ROLE_UPDATE"  # change staff role in shop
+STAFF_ACTIVATE = "STAFF_ACTIVATE"    # activate staff membership
+STAFF_DEACTIVATE = "STAFF_DEACTIVATE"  # deactivate staff membership
+STAFF_DELETE = "STAFF_DELETE"        # remove staff membership
+
+# ---------------------------------------------------------------------------
+# Shop-scope business permissions (declared for future modules)
+# ---------------------------------------------------------------------------
+CUSTOMER_VIEW = "CUSTOMER_VIEW"
+CUSTOMER_CREATE = "CUSTOMER_CREATE"
+CUSTOMER_UPDATE = "CUSTOMER_UPDATE"
+CUSTOMER_DELETE = "CUSTOMER_DELETE"
+CUSTOMER_ARCHIVE = "CUSTOMER_ARCHIVE"
+
+APPLICATION_VIEW = "APPLICATION_VIEW"
+APPLICATION_CREATE = "APPLICATION_CREATE"
+APPLICATION_UPDATE = "APPLICATION_UPDATE"
+APPLICATION_DELETE = "APPLICATION_DELETE"
+
+DOCUMENT_VIEW = "DOCUMENT_VIEW"
+DOCUMENT_UPLOAD = "DOCUMENT_UPLOAD"
+DOCUMENT_UPDATE = "DOCUMENT_UPDATE"
+DOCUMENT_VERIFY = "DOCUMENT_VERIFY"
+DOCUMENT_REJECT = "DOCUMENT_REJECT"
+DOCUMENT_DELETE = "DOCUMENT_DELETE"
+
+BILLING_VIEW = "BILLING_VIEW"
+BILLING_CREATE = "BILLING_CREATE"
+BILLING_UPDATE = "BILLING_UPDATE"
+BILLING_DISCOUNT = "BILLING_DISCOUNT"
+BILLING_CHARGE = "BILLING_CHARGE"
+BILLING_VOID = "BILLING_VOID"
+
+PAYMENT_VIEW = "PAYMENT_VIEW"
+PAYMENT_CREATE = "PAYMENT_CREATE"
+PAYMENT_UPDATE = "PAYMENT_UPDATE"
+
+# Service management permissions
+SERVICE_VIEW = "SERVICE_VIEW"
+SERVICE_CREATE = "SERVICE_CREATE"
+SERVICE_UPDATE = "SERVICE_UPDATE"
+SERVICE_ARCHIVE = "SERVICE_ARCHIVE"
+
+# Report permissions (Phase 9)
+REPORT_VIEW = "REPORT_VIEW"
+REPORT_EXPORT = "REPORT_EXPORT"
+
+# Receipt & Communication permissions (Phase 10)
+RECEIPT_VIEW = "RECEIPT_VIEW"
+RECEIPT_GENERATE = "RECEIPT_GENERATE"
+RECEIPT_SEND = "RECEIPT_SEND"
+COMMUNICATION_VIEW = "COMMUNICATION_VIEW"
+COMMUNICATION_SEND = "COMMUNICATION_SEND"
+
+
+# ---------------------------------------------------------------------------
+# Role → permission mappings
+# ---------------------------------------------------------------------------
+#: Platform role → set of platform-scope permissions it grants.
+PLATFORM_ROLE_PERMISSIONS: dict[PlatformRole, frozenset[str]] = {
+    PlatformRole.OWNER: frozenset(
+        {
+            SHOP_CREATE,
+            SHOP_VIEW,
+            SHOP_UPDATE,
+            SHOP_ACTIVATE,
+            SHOP_DEACTIVATE,
+            SHOP_ASSIGN_MANAGER,
+            USER_VIEW,
+            USER_MANAGE,
+            MEMBERSHIP_VIEW,
+            MEMBERSHIP_MANAGE,
+            AUDIT_VIEW,
+            STAFF_VIEW,
+            STAFF_CREATE,
+            STAFF_UPDATE,
+            STAFF_ROLE_UPDATE,
+            STAFF_ACTIVATE,
+            STAFF_DEACTIVATE,
+            SERVICE_VIEW,
+            SERVICE_CREATE,
+            SERVICE_UPDATE,
+            SERVICE_ARCHIVE,
+            RECEIPT_VIEW,
+            RECEIPT_GENERATE,
+            RECEIPT_SEND,
+            COMMUNICATION_VIEW,
+            COMMUNICATION_SEND,
+        }
+    ),
+    PlatformRole.ADMIN: frozenset(
+        {
+            SHOP_CREATE,
+            SHOP_VIEW,
+            SHOP_UPDATE,
+            SHOP_ACTIVATE,
+            SHOP_DEACTIVATE,
+            USER_VIEW,
+            USER_MANAGE,
+            MEMBERSHIP_VIEW,
+            MEMBERSHIP_MANAGE,
+            AUDIT_VIEW,
+            STAFF_VIEW,
+            STAFF_CREATE,
+            STAFF_UPDATE,
+            STAFF_ROLE_UPDATE,
+            STAFF_ACTIVATE,
+            STAFF_DEACTIVATE,
+            SERVICE_VIEW,
+            SERVICE_CREATE,
+            SERVICE_UPDATE,
+            SERVICE_ARCHIVE,
+        }
+    ),
+    PlatformRole.MANAGER: frozenset(
+        {
+            SHOP_VIEW,
+            SHOP_UPDATE,
+            USER_VIEW,
+            MEMBERSHIP_VIEW,
+            STAFF_VIEW,
+            AUDIT_VIEW,
+            SERVICE_VIEW,
+            SERVICE_CREATE,
+            SERVICE_UPDATE,
+            RECEIPT_VIEW,
+            RECEIPT_GENERATE,
+            COMMUNICATION_VIEW,
+            COMMUNICATION_SEND,
+        }
+    ),
+    PlatformRole.FINANCIAL_MANAGER: frozenset(
+        {SHOP_VIEW, PAYMENT_VIEW, AUDIT_VIEW, SERVICE_VIEW}
+    ),
+    PlatformRole.SUPPORT: frozenset({SHOP_VIEW, USER_VIEW, STAFF_VIEW, SERVICE_VIEW}),
+}
+
+#: Shop role → set of shop-scope permissions it grants.
+SHOP_ROLE_PERMISSIONS: dict[ShopRole, frozenset[str]] = {
+    ShopRole.OWNER: frozenset(
+        {
+            SHOP_VIEW,
+            SHOP_UPDATE,
+            MEMBERSHIP_VIEW,
+            MEMBERSHIP_MANAGE,
+            STAFF_VIEW,
+            STAFF_CREATE,
+            STAFF_UPDATE,
+            STAFF_ROLE_UPDATE,
+            STAFF_ACTIVATE,
+            STAFF_DEACTIVATE,
+            CUSTOMER_VIEW,
+            CUSTOMER_CREATE,
+            CUSTOMER_UPDATE,
+            CUSTOMER_DELETE,
+            CUSTOMER_ARCHIVE,
+            APPLICATION_VIEW,
+            APPLICATION_CREATE,
+            APPLICATION_UPDATE,
+            APPLICATION_DELETE,
+            DOCUMENT_VIEW,
+            DOCUMENT_UPLOAD,
+            DOCUMENT_UPDATE,
+            DOCUMENT_VERIFY,
+            DOCUMENT_REJECT,
+            DOCUMENT_DELETE,
+            BILLING_VIEW,
+            BILLING_CREATE,
+            BILLING_UPDATE,
+            BILLING_DISCOUNT,
+            BILLING_CHARGE,
+            BILLING_VOID,
+            PAYMENT_VIEW,
+            PAYMENT_CREATE,
+            PAYMENT_UPDATE,
+            SERVICE_VIEW,
+            SERVICE_CREATE,
+            SERVICE_UPDATE,
+            SERVICE_ARCHIVE,
+            REPORT_VIEW,
+            REPORT_EXPORT,
+            RECEIPT_VIEW,
+            RECEIPT_GENERATE,
+            RECEIPT_SEND,
+            COMMUNICATION_VIEW,
+            COMMUNICATION_SEND,
+        }
+    ),
+    ShopRole.MANAGER: frozenset(
+        {
+            SHOP_VIEW,
+            MEMBERSHIP_VIEW,
+            STAFF_VIEW,
+            CUSTOMER_VIEW,
+            CUSTOMER_CREATE,
+            CUSTOMER_UPDATE,
+            CUSTOMER_ARCHIVE,
+            APPLICATION_VIEW,
+            APPLICATION_CREATE,
+            APPLICATION_UPDATE,
+            DOCUMENT_VIEW,
+            DOCUMENT_UPLOAD,
+            DOCUMENT_UPDATE,
+            DOCUMENT_VERIFY,
+            DOCUMENT_REJECT,
+            DOCUMENT_DELETE,
+            BILLING_VIEW,
+            BILLING_CREATE,
+            BILLING_UPDATE,
+            BILLING_DISCOUNT,
+            BILLING_CHARGE,
+            PAYMENT_VIEW,
+            PAYMENT_CREATE,
+            PAYMENT_UPDATE,
+            SERVICE_VIEW,
+            SERVICE_CREATE,
+            SERVICE_UPDATE,
+            REPORT_VIEW,
+            REPORT_EXPORT,
+            RECEIPT_VIEW,
+            RECEIPT_GENERATE,
+            RECEIPT_SEND,
+            COMMUNICATION_VIEW,
+            COMMUNICATION_SEND,
+        }
+    ),
+    ShopRole.STAFF: frozenset(
+        {
+            SHOP_VIEW,
+            CUSTOMER_VIEW,
+            CUSTOMER_CREATE,
+            CUSTOMER_UPDATE,
+            APPLICATION_VIEW,
+            APPLICATION_CREATE,
+            APPLICATION_UPDATE,
+            DOCUMENT_VIEW,
+            DOCUMENT_UPLOAD,
+            DOCUMENT_UPDATE,
+            DOCUMENT_VERIFY,
+            DOCUMENT_REJECT,
+            SERVICE_VIEW,
+            REPORT_VIEW,
+            RECEIPT_VIEW,
+            COMMUNICATION_VIEW,
+        }
+    ),
+    ShopRole.FINANCIAL_STAFF: frozenset(
+        {
+            SHOP_VIEW,
+            CUSTOMER_VIEW,
+            APPLICATION_VIEW,
+            DOCUMENT_VIEW,
+            BILLING_VIEW,
+            PAYMENT_VIEW,
+            PAYMENT_CREATE,
+            PAYMENT_UPDATE,
+            SERVICE_VIEW,
+            REPORT_VIEW,
+            REPORT_EXPORT,
+            RECEIPT_VIEW,
+            RECEIPT_GENERATE,
+            RECEIPT_SEND,
+            COMMUNICATION_VIEW,
+            COMMUNICATION_SEND,
+        }
+    ),
+}
+
+
+def platform_permissions_for(role: PlatformRole | None) -> frozenset[str]:
+    """Return the platform permissions granted to a platform role (empty if none)."""
+    if role is None:
+        return frozenset()
+    return PLATFORM_ROLE_PERMISSIONS.get(role, frozenset())
+
+
+def shop_permissions_for(role: ShopRole | None) -> frozenset[str]:
+    """Return the shop permissions granted to a shop role (empty if none)."""
+    if role is None:
+        return frozenset()
+    return SHOP_ROLE_PERMISSIONS.get(role, frozenset())
+
+
+def platform_role_hierarchy() -> tuple[PlatformRole, ...]:
+    """Order of platform roles from most to least privileged (for documentation)."""
+    return (
+        PlatformRole.OWNER,
+        PlatformRole.ADMIN,
+        PlatformRole.MANAGER,
+        PlatformRole.FINANCIAL_MANAGER,
+        PlatformRole.SUPPORT,
+    )
+
+
+def shop_role_hierarchy() -> tuple[ShopRole, ...]:
+    """Order of shop roles from most to least privileged (for documentation)."""
+    return (
+        ShopRole.OWNER,
+        ShopRole.MANAGER,
+        ShopRole.STAFF,
+        ShopRole.FINANCIAL_STAFF,
+    )
