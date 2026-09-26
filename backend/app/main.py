@@ -8,8 +8,10 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
 from app import __version__
 from app.api.v1 import api_router
@@ -24,6 +26,23 @@ from app.modules.health.schemas import HealthStatus, LivenessResponse
 logger = get_logger(__name__)
 
 settings = get_settings()
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security headers to all responses."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        # Remove server header for security
+        if "server" in response.headers:
+            del response.headers["server"]
+        return response
 
 
 @asynccontextmanager
@@ -67,6 +86,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(SecurityHeadersMiddleware)
 
     register_exception_handlers(app)
 

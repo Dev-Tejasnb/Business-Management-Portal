@@ -16,7 +16,6 @@ credentials/
 .claude/
 $HOME/
 memory/
-.github/
 
 # Node
 node_modules/
