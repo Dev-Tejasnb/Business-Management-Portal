@@ -1,45 +1,152 @@
-# Environment
+# ============================================================
+# Business Management Portal - Git Ignore
+# ============================================================
+
+# ------------------------------------------------------------
+# Environment & Secrets
+# ------------------------------------------------------------
 .env
 .env.*
 !.env.example
 
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.egg-info/
-.eggs/
-build/
-dist/
-.venv/
-venv/
-.python-version
-.mypy_cache/
-.ruff_cache/
-.pytest_cache/
-.coverage
-htmlcov/
-*.log
+# Private keys / certificates / credentials
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+credentials/
 
-# Node / Next.js
+# ------------------------------------------------------------
+# Claude / AI / Local Agent Files
+# ------------------------------------------------------------
+.claude/
+$HOME/
+memory/
+
+# ------------------------------------------------------------
+# Node.js / Next.js
+# ------------------------------------------------------------
 node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
 .next/
 out/
-next-env.d.ts
-*.tsbuildinfo
+dist/
+build/
 
-# Docker volumes / data
-pgdata/
-redisdata/
-minio-data/
-volumes/
-data/
+# Next.js generated files
+frontend/next-env.d.ts
 
-# IDE / editor
-.idea/
-.vscode/
+# ------------------------------------------------------------
+# Python
+# ------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.coverage
+coverage.xml
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python packaging
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# ------------------------------------------------------------
+# Database / Local Data
+# ------------------------------------------------------------
+*.db
+*.sqlite
+*.sqlite3
+
+# Local database dumps
+*.sql.gz
+*.dump
+
+# ------------------------------------------------------------
+# Logs
+# ------------------------------------------------------------
+*.log
+logs/
+
+# ------------------------------------------------------------
+# Uploads / Generated Storage
+# ------------------------------------------------------------
+uploads/
+storage/
+media/
+
+# Generated PDF files
+*.pdf
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
 *.swp
 *.swo
-*.tmp
+
+# ------------------------------------------------------------
+# IDE / Editors
+# ------------------------------------------------------------
+.vscode/
+.idea/
+*.code-workspace
+
+# ------------------------------------------------------------
+# Operating System
+# ------------------------------------------------------------
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# ------------------------------------------------------------
+# Docker
+# ------------------------------------------------------------
+docker-compose.override.yml
+
+# Docker local volumes / data
+docker-data/
+docker-volumes/
+
+# ------------------------------------------------------------
+# Test / Build Artifacts
+# ------------------------------------------------------------
+test-results/
+playwright-report/
+blob-report/
+.nyc_output/
+
+# ------------------------------------------------------------
+# Archives / Local Project Copies
+# ------------------------------------------------------------
+*.zip
+*.tar
+*.tar.gz
+
+# ------------------------------------------------------------
+# Generated / Local Files
+# ------------------------------------------------------------
+*.local
+*.cache
+
+# ------------------------------------------------------------
+# Keep important example/config files
+# ------------------------------------------------------------
+!.env.example

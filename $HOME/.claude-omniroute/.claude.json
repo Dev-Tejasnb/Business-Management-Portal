@@ -14,9 +14,11 @@
     "auto-copy-config-hint": 2,
     "vscode-gpu-accel-garbled-glyphs": 2,
     "memory-command": 3,
-    "shift-enter": 4
+    "shift-enter": 4,
+    "theme-command": 4,
+    "powershell-tool-env": 4
   },
-  "promptQueueUseCount": 2,
+  "promptQueueUseCount": 11,
   "cachedGrowthBookFeatures": {
     "tengu_gypsum_kite": false,
     "tengu_timber_lark": "copy_a",
@@ -1151,7 +1153,9 @@
     "auto-copy-config-hint": 1,
     "vscode-gpu-accel-garbled-glyphs": 1,
     "memory-command": 1,
-    "shift-enter": 1
+    "shift-enter": 1,
+    "theme-command": 1,
+    "powershell-tool-env": 1
   },
   "lastClawdEntranceVersion": "2.1.282",
   "tipsHistoryByCommand": {
@@ -1163,5 +1167,9 @@
       "tipId": "memory-command",
       "numStartups": 3
     }
-  }
+  },
+  "autoModeEnvSetup": {
+    "denials": 2
+  },
+  "diffSidebarOpen": false
 }

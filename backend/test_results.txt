@@ -1,0 +1,39 @@
+Could not find platform independent libraries <prefix>
+============================= test session starts =============================
+platform win32 -- Python 3.14.7, pytest-9.1.1, pluggy-1.6.0 -- C:\Python314\python.exe
+cachedir: .pytest_cache
+rootdir: D:\Business Management Portal\Project Source Code\backend
+configfile: pyproject.toml
+plugins: anyio-4.15.1, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=session, asyncio_default_test_loop_scope=session
+collecting ... collected 164 items
+
+tests/test_applications.py::TestApplicationService::test_create_application PASSED [  0%]
+tests/test_applications.py::TestApplicationService::test_create_application_with_data ERROR [  1%]
+tests/test_applications.py::TestApplicationService::test_create_application_cross_shop_customer_fails PASSED [  1%]
+tests/test_applications.py::TestApplicationService::test_create_application_cross_shop_service_fails PASSED [  2%]
+tests/test_applications.py::TestApplicationService::test_create_application_cross_shop_staff_fails PASSED [  3%]
+tests/test_applications.py::TestApplicationService::test_create_application_cross_shop_staff_fails ERROR [  3%]
+tests/test_applications.py::TestApplicationService::test_create_application_validation_required_fields PASSED [  3%]
+tests/test_applications.py::TestApplicationService::test_create_application_validation_required_fields ERROR [  3%]
+tests/test_applications.py::TestApplicationService::test_create_app
+tests/test_applications.py::TePASSED [  4%]
+tests/test_applications.py::TestApplicationService::test_create_application_validation_field_types ERROR [  4%]
+tests/test_appPASSED [  6%]
+tests/test_applications.py::TestApplicationSERROR [  4%]
+tests/test_applicaFAILED [  7%]
+tests/test_applications.py::TestApplicationService::test_update_application_data ERROR [  7%]
+tests/test_applications.py::TestApplicationService::test_update_application_invalid_data ERROR [  8%]
+tests/test_applications.py::TestApplicationService::test_assign_staff ERROR [  9%]
+tests/test_applications.py::TestApplicationService::test_assign_staff_cross_shop_fails PASSED [  9%]
+tests/test_applications.py::TestApplicationService::test_update_status PASSED [ 10%]
+tests/test_applications.py::TestApplicationService::test_application_number_unique ERROR [ 10%]
+tests/test_applications.py::TestApplicationService::test_application_number_format ERROR [ 11%]
+tests/test_applications.py::TestApplicationService::test_multiple_applications_same_customer ERROR [ 12%]
+tests/test_applications.py::TestApplicationService::test_multiple_applications_same_service ERROR [ 12%]
+tests/test_applications.py::TestApplicationService::test_archived_service_not_usable_for_new_application ERROR [ 13%]
+tests/test_applications.py::TestApplicationService::test_inactive_service_usable PASSED [ 14%]
+tests/test_audit.py::test_login_success_is_audited py::TestApplicationService::test_multiple_applications_same_service PASSED [ 12%]
+tests/test_applications.py::TestApplicationService::test_archived_service_not_usable_for_new_application PASSED [ 13%]
+tests/test_applications.py::TestApplicationService::test_inactive_service_usable PASSED [ 14%]
+tests/test_audit.py::test_login_success_is_audited 

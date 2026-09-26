@@ -72,7 +72,7 @@ async def _clean_db():
     async with factory() as session:
         await session.execute(
             text(
-                "TRUNCATE TABLE documents, applications, audit_logs, platform_manager_shops, shop_memberships, shops, users, customers, services, service_fields, service_required_documents, service_categories "
+                "TRUNCATE TABLE communication_history, receipts, documents, applications, audit_logs, platform_manager_shops, shop_memberships, shops, users, customers, services, service_fields, service_required_documents, service_categories "
                 "RESTART IDENTITY CASCADE"
             )
         )
@@ -81,7 +81,7 @@ async def _clean_db():
     async with factory() as session:
         await session.execute(
             text(
-                "TRUNCATE TABLE documents, applications, audit_logs, platform_manager_shops, shop_memberships, shops, users, customers, services, service_fields, service_required_documents, service_categories "
+                "TRUNCATE TABLE communication_history, receipts, documents, applications, audit_logs, platform_manager_shops, shop_memberships, shops, users, customers, services, service_fields, service_required_documents, service_categories "
                 "RESTART IDENTITY CASCADE"
             )
         )

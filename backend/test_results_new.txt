@@ -1,0 +1,13 @@
+Could not find platform independent libraries <prefix>
+============================= test session starts =============================
+platform win32 -- Python 3.14.7, pytest-9.1.1, pluggy-1.6.0 -- C:\Python314\python.exe
+cachedir: .pytest_cache
+rootdir: D:\Business Management Portal\Project Source Code\backend
+configfile: pyproject.toml
+plugins: anyio-4.15.1, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=session, asyncio_default_test_loop_scope=session
+collecting ... collected 164 items
+
+tests/test_applications.py::TestApplicationService::test_create_application ERROR [  0%]
+tests/test_applications.py::TestApplicationService::test_create_application ERROR [  0%]
+tests/test_applications.py::TestApplicationService::test_create_application_with_data PASSED [  1%]

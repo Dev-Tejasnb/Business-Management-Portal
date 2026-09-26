@@ -392,10 +392,12 @@ class ReceiptService:
         story.append(Paragraph("Tax Invoice", heading_style))
         story.append(Spacer(1, 12))
 
+        from datetime import timedelta
+
         # Invoice details
         invoice_data = [
             ["Invoice Number:", billing.invoice_number, "Date:", billing.created_at.strftime("%d/%m/%Y")],
-            ["Due Date:", (billing.created_at.replace(day=billing.created_at.day + 30)).strftime("%d/%m/%"), ""],
+            ["Due Date:", (billing.created_at + timedelta(days=30)).strftime("%d/%m/%Y"), ""],
         ]
 
         if billing.customer:
