@@ -14,7 +14,7 @@ import { formatCurrency } from "@/lib/utils";
 import { Plus, Edit, Trash2, Save, X, Eye, Receipt, DollarSign,
   Minus, AlertCircle, CheckCircle, Loader2, CreditCard, Banknote,
   ArrowLeft, ArrowRight, RefreshCw, FileText, Shield, AlertTriangle,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, Download, Send, Mail, MessageSquare, Phone
 } from "lucide-react";
 import {
   BillingResponse,
@@ -35,7 +35,20 @@ import {
   DiscountType,
   BillingCalculationPreview,
 } from "@/src/types/billing";
-import { billingApi } from "@/lib/api";
+import {
+  ReceiptType,
+  ReceiptResponse,
+  CommunicationChannel,
+  CommunicationHistoryResponse,
+  SendReceiptRequest,
+  RECEIPT_TYPE_LABELS,
+  COMMUNICATION_CHANNEL_LABELS,
+} from "@/src/types/receipt";
+import { billingApi, receiptApi } from "@/lib/api";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { ReceiptViewer } from "@/components/receipt/receipt-viewer";
+import { SendReceiptDialog } from "@/components/receipt/send-receipt-dialog";
+import { CommunicationHistory } from "@/components/communication/communication-history";
 
 interface BillingManagerProps {
   shopId: number;
@@ -83,6 +96,18 @@ export function BillingManager({
   const [showPreviewDialog, setShowPreviewDialog] = useState(false);
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const [previewData, setPreviewData] = useState<BillingCalculationPreview | null>(null);
+
+  // Receipt states
+  const [showReceiptViewer, setShowReceiptViewer] = useState(false);
+  const [viewingInvoiceId, setViewingInvoiceId] = useState<number | null>(null);
+  const [viewingPaymentId, setViewingPaymentId] = useState<number | null>(null);
+  const [showSendReceiptDialog, setShowSendReceiptDialog] = useState(false);
+  const [sendingReceiptId, setSendingReceiptId] = useState<number | null>(null);
+  const [sendingReceiptType, setSendingReceiptType] = useState<ReceiptType>("invoice");
+  const [defaultRecipient, setDefaultRecipient] = useState<string>("");
+
+  // Communication history state
+  const [showCommunicationHistory, setShowCommunicationHistory] = useState(false);
 
   // Form states
   const [createForm, setCreateForm] = useState<BillingFormData>({
@@ -307,6 +332,103 @@ export function BillingManager({
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setCreatingPayment(false);
+    }
+  };
+
+  // Receipt handler functions
+  const handleViewInvoice = () => {
+    if (!billing) return;
+    setViewingInvoiceId(billing.id);
+    setViewingPaymentId(null);
+    setShowReceiptViewer(true);
+  };
+
+  const handleDownloadInvoice = async () => {
+    if (!billing) return;
+    try {
+      const data = await receiptApi.getInvoicePdf(shopId, billing.id);
+      window.open(data.signed_url, '_blank');
+    } catch (err) {
+      console.error("Failed to download invoice:", err);
+      setError("Failed to download invoice");
+    }
+  };
+
+  const handleSendInvoice = async () => {
+    if (!billing) return;
+    try {
+      // For sending, we need the receipt ID
+      // Try to get it from recent communications first
+      const communications = await receiptApi.listCommunications(shopId, {
+        limit: 10
+      });
+
+      // Look for a recent invoice communication for this billing
+      const invoiceComm = communications.items.find(
+        comm => comm.receipt_id &&
+                comm.channel &&
+                comm.status === "sent"
+      ) || communications.items.find(comm => comm.status === "sent");
+
+      if (invoiceComm && invoiceComm.receipt_id) {
+        setSendingReceiptId(invoiceComm.receipt_id);
+        setSendingReceiptType("invoice");
+        setDefaultRecipient(billing.customer_name || "");
+        setShowSendReceiptDialog(true);
+      } else {
+        // Fallback: show error suggesting to view receipt first
+        setError("Please view the invoice first to generate the receipt, then try sending again.");
+      }
+    } catch (err) {
+      console.error("Failed to send invoice:", err);
+      setError("Failed to prepare invoice for sending");
+    }
+  };
+
+  const handleViewPaymentReceipt = (paymentId: number) => {
+    setViewingInvoiceId(null);
+    setViewingPaymentId(paymentId);
+    setShowReceiptViewer(true);
+  };
+
+  const handleDownloadPaymentReceipt = async (paymentId: number) => {
+    try {
+      const data = await receiptApi.getPaymentReceiptPdf(shopId, paymentId);
+      window.open(data.signed_url, '_blank');
+    } catch (err) {
+      console.error("Failed to download payment receipt:", err);
+      setError("Failed to download payment receipt");
+    }
+  };
+
+  const handleSendPaymentReceipt = async (paymentId: number) => {
+    if (!billing) return;
+    try {
+      // For sending payment receipt, we need the receipt ID
+      // Try to get it from recent communications
+      const communications = await receiptApi.listCommunications(shopId, {
+        limit: 10
+      });
+
+      // Look for a recent payment receipt communication
+      const paymentComm = communications.items.find(
+        comm => comm.receipt_id &&
+                comm.channel &&
+                comm.status === "sent"
+      ) || communications.items.find(comm => comm.status === "sent");
+
+      if (paymentComm && paymentComm.receipt_id) {
+        setSendingReceiptId(paymentComm.receipt_id);
+        setSendingReceiptType("payment_receipt");
+        setDefaultRecipient(billing.customer_name || "");
+        setShowSendReceiptDialog(true);
+      } else {
+        // Fallback: show error suggesting to view receipt first
+        setError("Please view the payment receipt first to generate the receipt, then try sending again.");
+      }
+    } catch (err) {
+      console.error("Failed to send payment receipt:", err);
+      setError("Failed to prepare payment receipt for sending");
     }
   };
 
@@ -794,6 +916,61 @@ export function BillingManager({
                 </a>
               </Button>
             )}
+            {/* Receipt Actions */}
+            {(canPaymentView || canUpdate) && billing.billing_status !== "void" && (
+              <>
+                {billing.billing_status === "issued" && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline">
+                        <Receipt className="h-4 w-4 mr-1" /> Receipt Actions
+                        <ChevronDown className="h-4 w-4 ml-1" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuItem onClick={() => handleViewInvoice()}>
+                        <FileText className="h-4 w-4 mr-2" /> View Invoice
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleDownloadInvoice()}>
+                        <Download className="h-4 w-4 mr-2" /> Download Invoice
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => handleSendInvoice()}>
+                        <Send className="h-4 w-4 mr-2" /> Send Invoice
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+                {payments.length > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline">
+                        <Banknote className="h-4 w-4 mr-1" /> Payment Receipts
+                        <ChevronDown className="h-4 w-4 ml-1" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      {payments.map((payment) => (
+                        <DropdownMenuItem key={payment.id} onClick={() => handleViewPaymentReceipt(payment.id)}>
+                          <FileText className="h-4 w-4 mr-2" /> View Receipt #{payment.id}
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                      {payments.map((payment) => (
+                        <DropdownMenuItem key={`download-${payment.id}`} onClick={() => handleDownloadPaymentReceipt(payment.id)}>
+                          <Download className="h-4 w-4 mr-2" /> Download Receipt #{payment.id}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </>
+            )}
+            {canPaymentView && (
+              <Button variant="outline" onClick={() => setShowCommunicationHistory(true)}>
+                <Mail className="h-4 w-4 mr-1" /> Communication History
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -1090,6 +1267,46 @@ export function BillingManager({
             </div>
           </DialogContent>
         </Dialog>
+      )}
+
+      {/* Receipt Viewer */}
+      {showReceiptViewer && (
+        <ReceiptViewer
+          billingId={viewingInvoiceId ?? undefined}
+          paymentId={viewingPaymentId ?? undefined}
+          shopId={shopId}
+          onClose={() => {
+            setShowReceiptViewer(false);
+            setViewingInvoiceId(null);
+            setViewingPaymentId(null);
+          }}
+        />
+      )}
+
+      {/* Send Receipt Dialog */}
+      {showSendReceiptDialog && (
+        <SendReceiptDialog
+          receiptId={sendingReceiptId || 0}
+          shopId={shopId}
+          receiptType={sendingReceiptType}
+          defaultRecipient={defaultRecipient}
+          onClose={() => {
+            setShowSendReceiptDialog(false);
+            setSendingReceiptId(null);
+          }}
+          onSent={() => {
+            setShowSendReceiptDialog(false);
+            setSendingReceiptId(null);
+          }}
+        />
+      )}
+
+      {/* Communication History Dialog */}
+      {showCommunicationHistory && (
+        <CommunicationHistory
+          shopId={shopId}
+          onClose={() => setShowCommunicationHistory(false)}
+        />
       )}
     </div>
   );

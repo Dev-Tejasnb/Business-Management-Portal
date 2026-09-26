@@ -698,6 +698,53 @@ export const billingApi = {
     if (!res.ok) throw new ApiError(res.status, "Failed to get next invoice number");
     return res.json();
   },
+
+  /** Get invoice PDF (signed URL for download/view) */
+  async getInvoicePdf(shopId: number, billingId: number): Promise<{ signed_url: string; expires_at: string; receipt_id: number }> {
+    const res = await apiFetch(`/shops/${shopId}/billing/${billingId}/invoice`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to get invoice PDF");
+    return res.json();
+  },
+
+  /** Get payment receipt PDF (signed URL for download/view) */
+  async getPaymentReceiptPdf(shopId: number, paymentId: number): Promise<{ signed_url: string; expires_at: string; receipt_id: number }> {
+    const res = await apiFetch(`/shops/${shopId}/payments/${paymentId}/receipt`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to get payment receipt PDF");
+    return res.json();
+  },
+
+  /** Send receipt via communication channel */
+  async sendReceipt(shopId: number, receiptId: number, payload: { channel: string; recipient: string; subject?: string }): Promise<{ id: number; channel: string; recipient: string; status: string; sent_at?: string; created_at: string; error_message?: string }> {
+    const res = await apiFetch(`/shops/${shopId}/receipts/${receiptId}/send`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, body?.error?.message ?? "Failed to send receipt");
+    }
+    return res.json();
+  },
+
+  /** List communication history for a receipt */
+  async listCommunications(shopId: number, params: { receipt_id?: number; channel?: string; status?: string; limit?: number; offset?: number } = {}): Promise<{ items: any[]; total: number; limit: number; offset: number }> {
+    const searchParams = new URLSearchParams();
+    if (params.receipt_id) searchParams.set("receipt_id", String(params.receipt_id));
+    if (params.channel) searchParams.set("channel", params.channel);
+    if (params.status) searchParams.set("status", params.status);
+    if (params.limit) searchParams.set("limit", String(params.limit));
+    if (params.offset) searchParams.set("offset", String(params.offset));
+    const res = await apiFetch(`/shops/${shopId}/communications?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to list communications");
+    return res.json();
+  },
+
+  /** Get communication details */
+  async getCommunication(shopId: number, communicationId: number): Promise<any> {
+    const res = await apiFetch(`/shops/${shopId}/communications/${communicationId}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to get communication");
+    return res.json();
+  },
 };
 
 // ── Reports & Financial Analytics Types ──────────────────────────────────────
@@ -1120,5 +1167,130 @@ export const reportsApi = {
     const res = await apiFetch(`/shops/${shopId}/reports/export/documents?${searchParams.toString()}`);
     if (!res.ok) throw new ApiError(res.status, "Failed to export documents");
     return res.blob();
+  },
+};
+
+/* =============================================================================
+   Receipt & Communication API (Phase 10)
+   ============================================================================= */
+
+export type ReceiptType = "invoice" | "payment_receipt";
+export type ReceiptStatus = "generated" | "failed" | "regenerated";
+
+export type CommunicationChannel = "email" | "whatsapp" | "sms";
+export type CommunicationStatus = "pending" | "queued" | "sent" | "failed" | "cancelled";
+
+export interface ReceiptResponse {
+  id: number;
+  shop_id: number;
+  billing_id?: number;
+  payment_id?: number;
+  receipt_number: string;
+  receipt_type: ReceiptType;
+  storage_key?: string;
+  status: ReceiptStatus;
+  generated_at: string;
+  generated_by: number;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface CommunicationHistoryResponse {
+  id: number;
+  shop_id: number;
+  customer_id?: number;
+  application_id?: number;
+  payment_id?: number;
+  billing_id?: number;
+  receipt_id?: number;
+  channel: CommunicationChannel;
+  recipient: string;
+  subject?: string;
+  status: CommunicationStatus;
+  provider?: string;
+  provider_message_id?: string;
+  error_message?: string;
+  sent_at?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface SendReceiptRequest {
+  channel: CommunicationChannel;
+  recipient: string;
+  subject?: string;
+}
+
+export interface SendReceiptResponse {
+  id: number;
+  channel: CommunicationChannel;
+  recipient: string;
+  status: CommunicationStatus;
+  sent_at?: string;
+  created_at: string;
+  error_message?: string;
+}
+
+export interface CommunicationListParams {
+  receipt_id?: number;
+  channel?: CommunicationChannel;
+  status?: CommunicationStatus;
+  limit?: number;
+  offset?: number;
+}
+
+export interface CommunicationListResponse {
+  items: CommunicationHistoryResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export const receiptApi = {
+  /** Get invoice PDF signed URL */
+  async getInvoicePdf(shopId: number, billingId: number): Promise<{ signed_url: string; expires_at: string; receipt_id: number }> {
+    const res = await apiFetch(`/shops/${shopId}/billing/${billingId}/invoice`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to get invoice PDF");
+    return res.json();
+  },
+
+  /** Get payment receipt PDF signed URL */
+  async getPaymentReceiptPdf(shopId: number, paymentId: number): Promise<{ signed_url: string; expires_at: string; receipt_id: number }> {
+    const res = await apiFetch(`/shops/${shopId}/payments/${paymentId}/receipt`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to get payment receipt PDF");
+    return res.json();
+  },
+
+  /** Send receipt via communication channel */
+  async sendReceipt(shopId: number, receiptId: number, payload: SendReceiptRequest): Promise<SendReceiptResponse> {
+    const res = await apiFetch(`/shops/${shopId}/receipts/${receiptId}/send`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, body?.error?.message ?? "Failed to send receipt");
+    }
+    return res.json();
+  },
+
+  /** List communication history for a shop */
+  async listCommunications(shopId: number, params: CommunicationListParams = {}): Promise<CommunicationListResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.receipt_id) searchParams.set("receipt_id", String(params.receipt_id));
+    if (params.channel) searchParams.set("channel", params.channel);
+    if (params.status) searchParams.set("status", params.status);
+    if (params.limit) searchParams.set("limit", String(params.limit));
+    if (params.offset) searchParams.set("offset", String(params.offset));
+    const res = await apiFetch(`/shops/${shopId}/communications?${searchParams.toString()}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to list communications");
+    return res.json();
+  },
+
+  /** Get communication details */
+  async getCommunication(shopId: number, communicationId: number): Promise<CommunicationHistoryResponse> {
+    const res = await apiFetch(`/shops/${shopId}/communications/${communicationId}`);
+    if (!res.ok) throw new ApiError(res.status, "Failed to get communication");
+    return res.json();
   },
 };

@@ -160,3 +160,76 @@ class BillingCalculationPreview(BaseModel):
     discount_value: Optional[Annotated[Decimal, Field(decimal_places=2)]] = None
     discount_amount: Annotated[Decimal, Field(decimal_places=2)]
     total_amount: Annotated[Decimal, Field(decimal_places=2)]
+
+
+# Receipt schemas (Phase 10)
+class ReceiptBase(BaseModel):
+    """Base receipt schema."""
+    receipt_number: str
+    receipt_type: str
+    storage_key: Optional[str] = None
+    status: str
+
+
+class ReceiptCreate(BaseModel):
+    """Schema for creating a receipt (generating PDF)."""
+    pass
+
+
+class ReceiptResponse(ReceiptBase):
+    """Receipt response schema."""
+    id: int
+    shop_id: int
+    billing_id: Optional[int] = None
+    payment_id: Optional[int] = None
+    generated_at: datetime
+    generated_by: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CommunicationHistoryBase(BaseModel):
+    """Base communication history schema."""
+    channel: str
+    recipient: str
+    subject: Optional[str] = None
+    status: str
+
+
+class CommunicationHistoryResponse(CommunicationHistoryBase):
+    """Communication history response schema."""
+    id: int
+    shop_id: int
+    customer_id: Optional[int] = None
+    application_id: Optional[int] = None
+    payment_id: Optional[int] = None
+    billing_id: Optional[int] = None
+    receipt_id: Optional[int] = None
+    provider: Optional[str] = None
+    provider_message_id: Optional[str] = None
+    error_message: Optional[str] = None
+    sent_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SendReceiptRequest(BaseModel):
+    """Request schema for sending a receipt."""
+    channel: str = Field(..., pattern="^(email|whatsapp|sms)$")
+    recipient: str = Field(..., min_length=1, max_length=255)
+    subject: Optional[str] = Field(None, max_length=500)
+
+
+class SendReceiptResponse(BaseModel):
+    """Response schema for sending a receipt."""
+    id: int
+    channel: str
+    recipient: str
+    status: str
+    sent_at: Optional[datetime] = None
+    created_at: datetime
+    error_message: Optional[str] = None

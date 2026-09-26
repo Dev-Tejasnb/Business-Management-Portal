@@ -115,6 +115,13 @@ SERVICE_ARCHIVE = "SERVICE_ARCHIVE"
 REPORT_VIEW = "REPORT_VIEW"
 REPORT_EXPORT = "REPORT_EXPORT"
 
+# Receipt & Communication permissions (Phase 10)
+RECEIPT_VIEW = "RECEIPT_VIEW"
+RECEIPT_GENERATE = "RECEIPT_GENERATE"
+RECEIPT_SEND = "RECEIPT_SEND"
+COMMUNICATION_VIEW = "COMMUNICATION_VIEW"
+COMMUNICATION_SEND = "COMMUNICATION_SEND"
+
 
 # ---------------------------------------------------------------------------
 # Role → permission mappings
@@ -144,6 +151,11 @@ PLATFORM_ROLE_PERMISSIONS: dict[PlatformRole, frozenset[str]] = {
             SERVICE_CREATE,
             SERVICE_UPDATE,
             SERVICE_ARCHIVE,
+            RECEIPT_VIEW,
+            RECEIPT_GENERATE,
+            RECEIPT_SEND,
+            COMMUNICATION_VIEW,
+            COMMUNICATION_SEND,
         }
     ),
     PlatformRole.ADMIN: frozenset(
@@ -181,6 +193,10 @@ PLATFORM_ROLE_PERMISSIONS: dict[PlatformRole, frozenset[str]] = {
             SERVICE_VIEW,
             SERVICE_CREATE,
             SERVICE_UPDATE,
+            RECEIPT_VIEW,
+            RECEIPT_GENERATE,
+            COMMUNICATION_VIEW,
+            COMMUNICATION_SEND,
         }
     ),
     PlatformRole.FINANCIAL_MANAGER: frozenset(
@@ -233,6 +249,11 @@ SHOP_ROLE_PERMISSIONS: dict[ShopRole, frozenset[str]] = {
             SERVICE_ARCHIVE,
             REPORT_VIEW,
             REPORT_EXPORT,
+            RECEIPT_VIEW,
+            RECEIPT_GENERATE,
+            RECEIPT_SEND,
+            COMMUNICATION_VIEW,
+            COMMUNICATION_SEND,
         }
     ),
     ShopRole.MANAGER: frozenset(
@@ -266,6 +287,11 @@ SHOP_ROLE_PERMISSIONS: dict[ShopRole, frozenset[str]] = {
             SERVICE_UPDATE,
             REPORT_VIEW,
             REPORT_EXPORT,
+            RECEIPT_VIEW,
+            RECEIPT_GENERATE,
+            RECEIPT_SEND,
+            COMMUNICATION_VIEW,
+            COMMUNICATION_SEND,
         }
     ),
     ShopRole.STAFF: frozenset(
@@ -284,6 +310,8 @@ SHOP_ROLE_PERMISSIONS: dict[ShopRole, frozenset[str]] = {
             DOCUMENT_REJECT,
             SERVICE_VIEW,
             REPORT_VIEW,
+            RECEIPT_VIEW,
+            COMMUNICATION_VIEW,
         }
     ),
     ShopRole.FINANCIAL_STAFF: frozenset(
@@ -299,6 +327,11 @@ SHOP_ROLE_PERMISSIONS: dict[ShopRole, frozenset[str]] = {
             SERVICE_VIEW,
             REPORT_VIEW,
             REPORT_EXPORT,
+            RECEIPT_VIEW,
+            RECEIPT_GENERATE,
+            RECEIPT_SEND,
+            COMMUNICATION_VIEW,
+            COMMUNICATION_SEND,
         }
     ),
 }

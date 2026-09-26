@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Optional, List
 
 from decimal import Decimal
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, status, HTTPException
+from fastapi.responses import StreamingResponse
+from sqlalchemy import and_, selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import get_audit_service
@@ -28,8 +30,13 @@ from app.modules.billing.schemas import (
     PaymentUpdate,
 )
 from app.modules.billing.service import BillingService, PaymentService
+from app.modules.billing.receipt_service import ReceiptService
+from app.modules.communication.service import CommunicationService
+from app.core.dependency import get_communication_service
+from app.modules.billing.receipt_schemas import SendReceiptRequest, SendReceiptResponse
 from app.models.billing import Billing, BillingItem, BillingStatus, Payment, PaymentStatus
 from app.models.shop import Shop
+from app.models.receipt import Receipt
 
 router = APIRouter(prefix="/shops/{shop_id}/applications", tags=["billing"])
 
@@ -47,6 +54,19 @@ def get_payment_service(
     audit_service=Depends(get_audit_service),
 ) -> PaymentService:
     return PaymentService(session, audit_service)
+
+
+def get_receipt_service(
+    session: AsyncSession = Depends(get_session),
+) -> ReceiptService:
+    from app.core.storage import get_storage_service
+    return ReceiptService(session, get_storage_service())
+
+
+def get_communication_service(
+    session: AsyncSession = Depends(get_session),
+) -> CommunicationService:
+    return CommunicationService(session)
 
 
 # ---------------------------------------------------------------------------
@@ -710,3 +730,211 @@ async def get_next_invoice_number(
     """Get the next invoice number that would be generated."""
     invoice_number = await billing_service._generate_invoice_number(shop_id)
     return InvoiceNumberResponse(invoice_number=invoice_number)
+
+
+# ---------------------------------------------------------------------------
+# Receipt endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/billing/{billing_id}/invoice",
+    response_class=StreamingResponse,
+    dependencies=[Depends(require_permission("RECEIPT_VIEW"))],
+)
+async def get_invoice_pdf(
+    shop_id: int,
+    billing_id: int,
+    receipt_service: ReceiptService = Depends(get_receipt_service),
+    membership=Depends(get_current_membership),
+):
+    """Generate and retrieve invoice PDF for a billing."""
+    # Verify billing belongs to shop
+    billing_result = await receipt_service.session.execute(
+        select(Billing).where(
+            and_(Billing.id == billing_id, Billing.shop_id == shop_id)
+        )
+    )
+    billing = billing_result.scalar_one_or_none()
+    if not billing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Billing not found or does not belong to this shop"
+        )
+
+    # Generate or retrieve receipt
+    try:
+        receipt = await receipt_service.generate_invoice_pdf(
+            billing_id=billing_id,
+            generated_by=membership.user_id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+    # Get PDF from storage
+    if not receipt.storage_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Receipt PDF not found in storage"
+        )
+
+    try:
+        pdf_stream = receipt_service.storage_service.get_file_stream(receipt.storage_key)
+        return StreamingResponse(
+            pdf_stream,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'inline; filename="{receipt.receipt_number}.pdf"'
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Failed to retrieve receipt PDF from storage"
+        )
+
+
+@router.get(
+    "/payments/{payment_id}/receipt",
+    response_class=StreamingResponse,
+    dependencies=[Depends(require_permission("RECEIPT_VIEW"))],
+)
+async def get_payment_receipt_pdf(
+    shop_id: int,
+    payment_id: int,
+    receipt_service: ReceiptService = Depends(get_receipt_service),
+    membership=Depends(get_current_membership),
+):
+    """Generate and retrieve payment receipt PDF for a payment."""
+    # Verify payment belongs to shop through its billing
+    payment_result = await receipt_service.session.execute(
+        select(Payment)
+        .where(Payment.id == payment_id)
+        .options(selectinload(Payment.billing))
+        .where(Payment.billing.has(Billing.shop_id == shop_id))
+    )
+    payment = payment_result.scalar_one_or_none()
+    if not payment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Payment not found or does not belong to this shop"
+        )
+
+    # Generate or retrieve receipt
+    try:
+        receipt = await receipt_service.generate_payment_receipt_pdf(
+            payment_id=payment_id,
+            generated_by=membership.user_id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+    # Get PDF from storage
+    if not receipt.storage_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Receipt PDF not found in storage"
+        )
+
+    try:
+        pdf_stream = receipt_service.storage_service.get_file_stream(receipt.storage_key)
+        return StreamingResponse(
+            pdf_stream,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'inline; filename="{receipt.receipt_number}.pdf"'
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Failed to retrieve receipt PDF from storage"
+        )
+
+
+@router.post(
+    "/receipts/{receipt_id}/send",
+    response_model=SendReceiptResponse,
+    dependencies=[Depends(require_permission("RECEIPT_SEND"))],
+)
+async def send_receipt(
+    shop_id: int,
+    receipt_id: int,
+    send_data: SendReceiptRequest,
+    request: Request,
+    receipt_service: ReceiptService = Depends(get_receipt_service),
+    communication_service: CommunicationService = Depends(get_communication_service),
+    membership=Depends(get_current_membership),
+):
+    """Send a receipt via email, WhatsApp, or SMS."""
+    # Verify receipt belongs to shop
+    receipt_result = await receipt_service.session.execute(
+        select(Receipt).where(
+            and_(Receipt.id == receipt_id, Receipt.shop_id == shop_id)
+        )
+    )
+    receipt = receipt_result.scalar_one_or_none()
+    if not receipt:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Receipt not found or does not belong to this shop"
+        )
+
+    # Verify receipt has been generated (has storage key)
+    if not receipt.storage_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Receipt PDF not generated yet"
+        )
+
+    # Send communication
+    try:
+        communication = await communication_service.send_receipt(
+            receipt=receipt,
+            channel=send_data.channel,
+            recipient=send_data.recipient,
+            subject=send_data.subject,
+            shop_id=shop_id,
+            sent_by=membership.user_id,
+        )
+
+        # Record audit log
+        audit_service = get_audit_service()
+        await audit_service.record_from_request(
+            request,
+            action="receipt.send",
+            module="billing",
+            actor_user_id=membership.user_id,
+            actor_role=membership.get("role"),
+            shop_id=shop_id,
+            entity_type="receipt",
+            entity_id=receipt.id,
+            extra={
+                "channel": send_data.channel,
+                "recipient": send_data.recipient,
+                "receipt_number": receipt.receipt_number,
+            }
+        )
+
+        return SendReceiptResponse(
+            id=communication.id,
+            channel=communication.channel,
+            recipient=communication.recipient,
+            status=communication.status,
+            sent_at=communication.sent_at,
+            created_at=communication.created_at,
+            error_message=communication.error_message,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to send receipt: {str(e)}"
+        )
+
+
